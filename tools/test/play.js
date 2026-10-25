@@ -38,6 +38,12 @@ server.listen(0, async () => {
   await page.goto(`http://localhost:${port}/index.html`);
   // Wait for the game object to exist.
   await page.waitForFunction(() => window.gdjs && gdjs.PotionShop && gdjs.PotionShop.game, null, { timeout: 60000 });
+  // GDevelop's "Made with GDevelop" watermark covers the bottom of the screen
+  // for its first seconds and catches taps: wait until it is hidden.
+  await page.waitForFunction(() => {
+    const els = [...document.querySelectorAll('div')].filter((d) => d.innerText && d.innerText.includes('Made with GDevelop'));
+    return els.every((d) => getComputedStyle(d).display === 'none' || d.offsetParent === null);
+  }, null, { timeout: 60000 }).catch(() => {});
   const shot = async (name) => { await page.screenshot({ path: path.join(outDir, name + '.png') }); };
   const evalG = (fn, arg) => page.evaluate(fn, arg);
   // Tap at game coordinates (720-wide game space -> CSS pixels).

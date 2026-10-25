@@ -27,6 +27,17 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 - Patience bars go from green to yellow to red. When patience runs out, the customer leaves without paying. Faster service earns bigger tips.
 - Bottom menu: **Orders** (order list with a quick Brew button), **Herbs** (buy ingredients), **Upgrades**, **Workers**, **Expand** (tables and cauldrons). Gold price tags in the shop mark slots you can buy.
 
+## Progression (Milestone 2)
+
+- **7 potions**, unlocked by shop level:
+  - Healing and Energy (level 1);
+  - Mana (2), Strength (3), Speed (4);
+  - Night Vision (5) and Fire Shield (6).
+- **Herb pantry:** 20 of each herb to start; the Bigger Pantry upgrade adds 10 per level. The bag icon in the top bar warns when a known recipe can't be brewed.
+- **Upgrades:** Quick Brew, Swift Shoes, Quick Hands, Cozy Decor, Fine Bottles and Bigger Pantry, with costs that rise each level.
+- **Expansion:** up to 6 tables and 3 cauldrons. They appear in the shop when bought.
+- **Customers:** 7 types (some arrive from later levels) with different patience, tips and speed. When all tables are full, up to 4 customers queue outside the door and come in first-come, first-served.
+
 ## Project structure
 
 | Path | What it is |
@@ -54,7 +65,7 @@ python3 tools/build_ui.py        # UI images   -> game/assets/ui
 python3 tools/build_sfx.py       # sounds      -> game/assets/sfx
 python3 tools/build_project.py   # GDevelop project (embeds src/*.js as events)
 tools/export.sh <GDevelop portable app dir> docs   # HTML5 export with the official GDevelop CLI
-node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, showcase)
+node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, bot, showcase)
 ```
 
 Note: `build_project.py` regenerates `game/PotionShop.json`. If you edit the project in GDevelop, keep working in GDevelop or port your changes back to the tools.

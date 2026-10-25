@@ -64,8 +64,9 @@ PS.UI = {
     return o;
   },
 
-  hit(list, x, y, w, h, fn) {
-    list.push({ x, y, w, h, fn });
+  // `label` identifies the hit area (used by the automated tests).
+  hit(list, x, y, w, h, fn, label) {
+    list.push({ x, y, w, h, fn, label: label || '' });
   },
 
   button(G, P, x, y, w, h, style, label, opts) {
@@ -86,8 +87,9 @@ PS.UI = {
       this.text(G, label, tx, y + h / 2 - size * 0.66, tw, size, '255;255;255', 'center', P.items, 'UI', 22,
         disabled ? '90;90;100' : '60;40;30');
     }
-    if (!disabled && opts.onTap) this.hit(P.hits, x, y, w, h, opts.onTap);
-    else if (disabled) this.hit(P.hits, x, y, w, h, opts.onDisabled || (() => {}));
+    const tag = opts.tag || label || opts.icon;
+    if (!disabled && opts.onTap) this.hit(P.hits, x, y, w, h, opts.onTap, tag);
+    else if (disabled) this.hit(P.hits, x, y, w, h, opts.onDisabled || (() => {}), 'disabled:' + tag);
   },
 
   bar(G, list, x, y, w, h, ratio, color, layer, z) {
@@ -185,7 +187,7 @@ PS.UI = {
       this.icon(G, ic, x + bw / 2, H - navH + 42, 54, L, 'UI', 12);
       this.text(G, label, x, H - navH + 68, bw, 22, '255;246;226', 'center', L, 'UI', 12, '60;36;20');
       hud.tabs[id] = sel;
-      this.hit(hud.hits, x, H - navH - 4, bw, navH + 4, () => this.toggle(G, id));
+      this.hit(hud.hits, x, H - navH - 4, bw, navH + 4, () => this.toggle(G, id), 'tab:' + id);
     });
     hud.badge = {};
     hud.ordersBadge = this.panelBox(G, 'BtnRed', 12 + bw - 46, H - navH - 6, 38, 34, L, 13);
@@ -339,22 +341,22 @@ PS.UI = {
     const rx = cx + 56;
     this.panelBox(G, 'PanelParchment', rx, y, sz, sz, P.items, 16);
     let result = null;
+    // Result name on its own line under the slots.
+    const line = y + sz + 8;
     if (slots.length === 2) {
       result = PS.findRecipe(slots);
       const known = result && result.unlockLevel <= G.state.level;
       this.icon(G, result && known ? result.icon : 'potion_sludge', rx + sz / 2, y + sz / 2, 80, P.items, 'UI', 17);
-      this.text(G, result && known ? result.name : 'Murky Sludge (unknown mix)', rx + sz + 10, y + 18,
-        area.x + area.w - rx - sz - 10, 26, result && known ? COLORS.ink : COLORS.red, 'left', P.items, 'UI', 17);
-      if (result && known) {
-        this.text(G, 'Sells for ~' + Math.round(result.price * G.mult('fine_bottles', +1)) + 'g', rx + sz + 10, y + 52,
-          area.x + area.w - rx - sz - 10, 22, COLORS.muted, 'left', P.items, 'UI', 17);
-      }
+      const label = result && known
+        ? result.name + '  ·  sells for ~' + Math.round(result.price * G.mult('fine_bottles', +1)) + 'g'
+        : 'Unknown mix: this makes Murky Sludge (worth nothing)';
+      this.text(G, label, area.x, line, area.w, 24, result && known ? COLORS.ink : COLORS.red, 'center', P.items, 'UI', 17);
     } else {
       this.text(G, '?', rx, y + 18, sz, 56, COLORS.muted, 'center', P.items, 'UI', 17);
-      this.text(G, 'Pick 2 ingredients', rx + sz + 10, y + 30, area.x + area.w - rx - sz - 10, 24, COLORS.muted,
-        'left', P.items, 'UI', 17);
+      this.text(G, 'Pick 2 ingredients, or tap a recipe below', area.x, line, area.w, 24, COLORS.muted, 'center',
+        P.items, 'UI', 17);
     }
-    y += sz + 16;
+    y += sz + 44;
     this.button(G, P, cx - 150, y, 300, 76, 'BtnGreen', 'BREW', {
       size: 38,
       icon: 'icon_brew',
@@ -462,7 +464,7 @@ PS.UI = {
       this.text(G, status, x + 90, y + 84, 300, 20, col, 'left', P.items, 'UI', 17);
       const pay = Math.round(r.price * G.mult('fine_bottles', +1) * c.type.tip * (1 + PS.data.balance.tipMax * ratio));
       this.icon(G, 'icon_coin', x + w - 196, y + 26, 30, P.items, 'UI', 17);
-      this.text(G, '~' + pay, x + w - 178, y + 12, 70, 26, '170;120;20', 'left', P.items, 'UI', 17);
+      this.text(G, pay + 'g', x + w - 178, y + 12, 70, 26, '170;120;20', 'left', P.items, 'UI', 17);
       if (c.state === 'waitingOrder') {
         this.button(G, P, x + w - 150, y + h - 62, 140, 54, 'BtnBlue', 'Take', {
           size: 26,
@@ -475,6 +477,7 @@ PS.UI = {
         const idle = PS.Brewing.idleCauldron(G);
         const can = PS.Brewing.canBrew(G, r);
         this.button(G, P, x + w - 150, y + h - 62, 140, 54, 'BtnGreen', 'Brew', {
+          tag: 'brew:' + c.id,
           size: 26,
           disabled: !idle || !can,
           onTap: () => {
@@ -503,12 +506,16 @@ PS.UI = {
         return;
       }
       const n = inv[ing.id] || 0;
-      this.text(G, 'In stock: ' + n + (n <= 2 ? '  LOW!' : ''), x + 92, y + 50, 240, 24, n <= 2 ? COLORS.red : COLORS.green,
+      const cap = G.storageCap();
+      const full = n + ing.bundle > cap;
+      this.text(G, 'In stock: ' + n + ' / ' + cap + (n <= 2 ? '  LOW!' : ''), x + 92, y + 50, 260, 24,
+        n <= 2 ? COLORS.red : COLORS.green,
         'left', P.items, 'UI', 17);
       const cost = ing.cost * ing.bundle;
       this.button(G, P, x + w - 200, y + 14, 190, h - 28, 'BtnGold', '+' + ing.bundle + '  ' + cost + 'g', {
+        tag: 'buy:' + ing.id,
         size: 26,
-        disabled: G.state.gold < cost,
+        disabled: G.state.gold < cost || full,
         onTap: () => {
           G.addGold(-cost);
           inv[ing.id] = n + ing.bundle;
@@ -516,7 +523,7 @@ PS.UI = {
           G.requestSave();
           this.rebuild(G);
         },
-        onDisabled: () => this.toast(G, 'Not enough gold'),
+        onDisabled: () => this.toast(G, full ? 'Pantry is full — upgrade it in Upgrades' : 'Not enough gold'),
       });
     });
     this.list(G, P, area, 108, rows);
@@ -544,6 +551,7 @@ PS.UI = {
         this.text(G, 'MAX', x + w - 190, y + h / 2 - 18, 170, 32, COLORS.green, 'center', P.items, 'UI', 17);
       } else {
         this.button(G, P, x + w - 200, y + h / 2 - 34, 190, 68, 'BtnGold', cost + 'g', {
+          tag: 'upgrade:' + u.id,
           icon: 'icon_coin',
           iconSize: 36,
           size: 30,

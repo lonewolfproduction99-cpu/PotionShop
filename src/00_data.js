@@ -57,6 +57,7 @@ PS.loadData = function (runtimeScene) {
     spawnIntervalMin: Number(b.SpawnIntervalMin) || 6,
     queueSize: Number(b.QueueSize) || 3,
     maxStock: Number(b.MaxStock) || 6,
+    storageBase: Number(b.StorageBase) || 20,
     ownerSpeed: Number(b.OwnerSpeed) || 150,
     takeOrderTime: Number(b.TakeOrderTime) || 1.4,
     addIngredientsTime: Number(b.AddIngredientsTime) || 1.2,

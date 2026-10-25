@@ -61,6 +61,11 @@ PS.Game = class {
     const v = u.effect * this.level(id) * Math.abs(sign);
     return sign > 0 ? 1 + v : 1 / (1 + v);
   }
+  // How many of each herb fits in the pantry.
+  storageCap() {
+    const u = PS.data.upgradeById.herb_storage;
+    return PS.data.balance.storageBase + (u ? u.effect * this.level('herb_storage') : 0);
+  }
   upgradeMax(u) {
     if (u.id === 'extra_table') return Math.min(u.maxLevel, this.seats.length - 3);
     if (u.id === 'extra_cauldron') return Math.min(u.maxLevel, this.cauldrons.length - 1);
@@ -103,7 +108,7 @@ PS.Game = class {
       leveled = true;
       for (const r of PS.data.recipes) if (r.unlockLevel === s.level) newRecipes.push(r);
       for (const ing of PS.data.ingredients) {
-        if (ing.unlockLevel === s.level) s.inventory[ing.id] = (s.inventory[ing.id] || 0) + 4;
+        if (ing.unlockLevel === s.level) s.inventory[ing.id] = Math.min(this.storageCap(), (s.inventory[ing.id] || 0) + 4);
       }
     }
     if (leveled) {
@@ -165,11 +170,15 @@ PS.Game = class {
   // ----- main loop
   update() {
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
-    this.time += dt;
-    PS.World.updateCustomers(this, dt);
-    PS.Workers.update(this, dt);
-    PS.Brewing.update(this, dt);
-    PS.FX.update(this, dt);
+    // PS.simSteps > 1 runs the simulation several times per frame (automated tests only).
+    const steps = PS.simSteps || 1;
+    for (let i = 0; i < steps; i++) {
+      this.time += dt;
+      PS.World.updateCustomers(this, dt);
+      PS.Workers.update(this, dt);
+      PS.Brewing.update(this, dt);
+      PS.FX.update(this, dt);
+    }
     PS.UI.update(this, dt);
     this.saveTimer += dt;
     if (this.saveTimer > 8 && this.needSave) this.saveNow();

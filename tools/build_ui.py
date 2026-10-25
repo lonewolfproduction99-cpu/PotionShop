@@ -109,6 +109,25 @@ def potion_icon(kind, color):
             base = 48 + sx * 20
             poly(d, [(base, 50), (base + sx * 22, 36), (base + sx * 20, 46), (base + sx * 26, 48),
                      (base + sx * 18, 56), (base + sx * 22, 60), (base, 64)], (255, 255, 255, 255), width=2)
+    elif kind == "moon":  # night vision: round flask with a crescent moon and stars
+        rrect(d, (38, 10, 58, 30), 3, glass)
+        ellipse(d, (16, 26, 80, 90), glass)
+        d.pieslice([S(19), S(29), S(77), S(87)], 0, 180, fill=c)
+        d.rectangle([S(19), S(50), S(77), S(58)], fill=c)
+        ellipse(d, (16, 26, 80, 90), None)
+        d.pieslice([S(34), S(56), S(60), S(82)], 0, 360, fill=(255, 240, 170, 255))
+        d.pieslice([S(41), S(52), S(67), S(78)], 0, 360, fill=c)
+        for (x, y) in ((60, 64), (52, 76)):
+            d.line([S(x - 3), S(y), S(x + 3), S(y)], fill=(255, 240, 170, 255), width=S(2))
+            d.line([S(x), S(y - 3), S(x), S(y + 3)], fill=(255, 240, 170, 255), width=S(2))
+    elif kind == "flame":  # fire shield: square bottle with a flame
+        rrect(d, (38, 8, 58, 26), 3, glass)
+        rrect(d, (18, 24, 78, 90), 6, glass)
+        rrect(d, (21, 42, 75, 87), 4, c, outline=None)
+        rrect(d, (18, 24, 78, 90), 6, None)
+        poly(d, [(48, 48), (60, 64), (58, 78), (48, 84), (38, 78), (36, 64), (44, 58)], (255, 230, 120, 255),
+             outline=dark, width=2)
+        poly(d, [(48, 64), (54, 72), (52, 80), (44, 80), (43, 72)], (255, 140, 40, 255), outline=None)
     else:  # sludge
         rrect(d, (38, 8, 58, 26), 3, glass)
         ellipse(d, (18, 28, 78, 90), glass)
@@ -481,7 +500,8 @@ def solid(color, size=8):
 def main():
     os.makedirs(OUT, exist_ok=True)
     potions = {"healing": ("round", "e0303a"), "energy": ("bolt", "ffb020"), "mana": ("vial", "3a7cff"),
-               "strength": ("square", "b0602d"), "speed": ("wing", "39d98a"), "sludge": ("sludge", "6a7a4a")}
+               "strength": ("square", "b0602d"), "speed": ("wing", "39d98a"), "sludge": ("sludge", "6a7a4a"),
+               "night": ("moon", "5a3aa0"), "fire": ("flame", "e0502a")}
     for name, (kind, col) in potions.items():
         potion_icon(kind, col).save(os.path.join(OUT, "potion_%s.png" % name))
     for name in ("redleaf", "moonwater", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint"):

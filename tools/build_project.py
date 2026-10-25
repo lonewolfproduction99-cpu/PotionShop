@@ -313,6 +313,10 @@ RECIPES = [
          Color="190;100;45", Icon="potion_strength", UnlockLevel=3),
     dict(Id="speed", Name="Speed Potion", Ingredients=["swiftmint", "sparkdust"], Price=36, BrewTime=9,
          Color="60;225;140", Icon="potion_speed", UnlockLevel=4),
+    dict(Id="night", Name="Night Vision Potion", Ingredients=["bluecap", "sunroot"], Price=44, BrewTime=10,
+         Color="110;70;200", Icon="potion_night", UnlockLevel=5),
+    dict(Id="fire", Name="Fire Shield Potion", Ingredients=["ironroot", "sunroot"], Price=52, BrewTime=11,
+         Color="235;90;40", Icon="potion_fire", UnlockLevel=6),
 ]
 INGREDIENTS = [
     dict(Id="redleaf", Name="Redleaf", Cost=2, Bundle=5, Icon="ing_redleaf", UnlockLevel=1),
@@ -344,13 +348,15 @@ UPGRADES = [
          MinShopLevel=1),
     dict(Id="fine_bottles", Name="Fine Bottles", Description="Potions sell for more gold.", Icon="icon_coin",
          Tab="upgrades", BaseCost=100, CostGrowth=1.7, MaxLevel=5, Effect=0.1, MinShopLevel=2),
+    dict(Id="herb_storage", Name="Bigger Pantry", Description="Store 10 more of each herb.", Icon="icon_bag",
+         Tab="upgrades", BaseCost=60, CostGrowth=1.6, MaxLevel=5, Effect=10, MinShopLevel=2),
     dict(Id="extra_table", Name="Extra Table", Description="Seat one more customer.", Icon="icon_tables",
          Tab="expand", BaseCost=60, CostGrowth=1.8, MaxLevel=3, Effect=1, MinShopLevel=1),
     dict(Id="extra_cauldron", Name="Extra Cauldron", Description="Brew more potions at the same time.",
-         Icon="icon_brew", Tab="expand", BaseCost=160, CostGrowth=2.0, MaxLevel=2, Effect=1, MinShopLevel=2),
+         Icon="icon_brew", Tab="expand", BaseCost=120, CostGrowth=2.0, MaxLevel=2, Effect=1, MinShopLevel=2),
 ]
-BALANCE = dict(StartGold=40, StartIngredients=6, XpPerServe=10, SpawnIntervalStart=11, SpawnIntervalMin=5,
-               QueueSize=3, MaxStock=6, OwnerSpeed=150, TakeOrderTime=1.4, AddIngredientsTime=1.2,
+BALANCE = dict(StartGold=40, StartIngredients=6, XpPerServe=10, SpawnIntervalStart=12, SpawnIntervalMin=6,
+               QueueSize=3, MaxStock=6, StorageBase=20, OwnerSpeed=150, TakeOrderTime=1.4, AddIngredientsTime=1.2,
                CollectTime=0.8, DeliverTime=0.7, TipMax=0.5, SludgePrice=0)
 
 

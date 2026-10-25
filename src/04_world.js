@@ -147,7 +147,7 @@ PS.World = {
       G.spawnTimer = 1;
       return;
     }
-    const base = Math.max(b.spawnIntervalMin, b.spawnIntervalStart - (G.state.level - 1) * 1.1);
+    const base = Math.max(b.spawnIntervalMin, b.spawnIntervalStart - (G.state.level - 1) * 0.8);
     G.spawnTimer = base * U.rand(0.75, 1.25);
     this.spawnCustomer(G);
   },
