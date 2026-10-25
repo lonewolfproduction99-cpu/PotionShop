@@ -307,6 +307,8 @@ PS.UI = {
         return this.buildStats(G, P);
       case 'levelup':
         return this.buildLevelUp(G, P);
+      case 'offline':
+        return this.buildOffline(G, P);
     }
   },
 
@@ -483,7 +485,7 @@ PS.UI = {
       this.text(G, status, x + 90, y + 84, 300, 20, col, 'left', P.items, 'UI', 17);
       const pay = Math.round(r.price * G.mult('fine_bottles', +1) * c.type.tip * (1 + PS.data.balance.tipMax * ratio));
       this.icon(G, 'icon_coin', x + w - 196, y + 26, 30, P.items, 'UI', 17);
-      this.text(G, pay + 'g', x + w - 178, y + 12, 70, 26, '170;120;20', 'left', P.items, 'UI', 17);
+      this.text(G, U.formatGold(pay) + 'g', x + w - 178, y + 12, 70, 26, '170;120;20', 'left', P.items, 'UI', 17);
       if (c.state === 'waitingOrder') {
         this.button(G, P, x + w - 150, y + h - 62, 140, 54, 'BtnBlue', 'Take', {
           size: 26,
@@ -548,7 +550,7 @@ PS.UI = {
         n <= 2 ? COLORS.red : COLORS.green,
         'left', P.items, 'UI', 17);
       const cost = ing.cost * ing.bundle;
-      this.button(G, P, x + w - 200, y + 14, 190, h - 28, 'BtnGold', '+' + ing.bundle + '  ' + cost + 'g', {
+      this.button(G, P, x + w - 200, y + 14, 190, h - 28, 'BtnGold', '+' + ing.bundle + '  ' + U.formatGold(cost) + 'g', {
         tag: 'buy:' + ing.id,
         size: 26,
         disabled: G.state.gold < cost || full,
@@ -586,7 +588,7 @@ PS.UI = {
       } else if (maxed) {
         this.text(G, 'MAX', x + w - 190, y + h / 2 - 18, 170, 32, COLORS.green, 'center', P.items, 'UI', 17);
       } else {
-        this.button(G, P, x + w - 200, y + h / 2 - 34, 190, 68, 'BtnGold', cost + 'g', {
+        this.button(G, P, x + w - 200, y + h / 2 - 34, 190, 68, 'BtnGold', U.formatGold(cost) + 'g', {
           tag: 'upgrade:' + u.id,
           icon: 'icon_coin',
           iconSize: 36,
@@ -648,7 +650,7 @@ PS.UI = {
             return;
           }
           const cost = G.workerUpgradeCost(index, id);
-          this.button(G, P, bx, by + 28, bw, 60, 'BtnGold', cost + 'g', {
+          this.button(G, P, bx, by + 28, bw, 60, 'BtnGold', U.formatGold(cost) + 'g', {
             tag: 'wup:' + index + ':' + id,
             icon: ic,
             iconSize: 32,
@@ -679,7 +681,7 @@ PS.UI = {
         : 'Takes orders, brews and delivers on their own.', x + 90, y + 52, w - 330, 22,
         locked ? '235;235;235' : COLORS.muted, 'left', P.items, 'UI', 17);
       if (!locked) {
-        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', next.hireCost + 'g', {
+        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', U.formatGold(next.hireCost) + 'g', {
           tag: 'hire',
           icon: 'icon_coin',
           iconSize: 36,
@@ -715,11 +717,23 @@ PS.UI = {
       },
     });
     y += 96;
-    this.button(G, P, area.x, y, area.w, 80, 'BtnPurple', G.settings.sound ? 'Sound: ON' : 'Sound: OFF', {
+    const half = (area.w - 16) / 2;
+    this.button(G, P, area.x, y, half, 80, 'BtnPurple', G.settings.sound ? 'Sounds: ON' : 'Sounds: OFF', {
       icon: 'icon_sound',
+      size: 26,
       onTap: () => {
         G.settings.sound = !G.settings.sound;
         G.saveSettings();
+        this.rebuild(G);
+      },
+    });
+    this.button(G, P, area.x + half + 16, y, half, 80, 'BtnPurple', G.settings.music ? 'Music: ON' : 'Music: OFF', {
+      icon: 'icon_sound',
+      size: 26,
+      onTap: () => {
+        G.settings.music = !G.settings.music;
+        G.saveSettings();
+        PS.Audio.music(G);
         this.rebuild(G);
       },
     });
@@ -737,7 +751,7 @@ PS.UI = {
       },
     });
     y += 100;
-    this.text(G, 'Potion Shop · Milestone 1 build · progress saves automatically', area.x, y, area.w, 20, COLORS.muted,
+    this.text(G, 'Potion Shop · progress saves automatically', area.x, y, area.w, 20, COLORS.muted,
       'center', P.items, 'UI', 16);
   },
 
@@ -754,6 +768,28 @@ PS.UI = {
     lines.forEach(([ic, t], i) => {
       this.icon(G, ic, area.x + 28, area.y + 26 + i * 64, 46, P.items, 'UI', 17);
       this.text(G, t, area.x + 64, area.y + 10 + i * 64, area.w - 70, 28, COLORS.ink, 'left', P.items, 'UI', 17);
+    });
+  },
+
+  // Gold earned by the apprentices while the game was closed.
+  buildOffline(G, P) {
+    const area = this.frame(G, P, 'Welcome back!', 520);
+    const { gold, seconds } = P.params;
+    this.icon(G, 'icon_workers', area.x + 60, area.y + 70, 100, P.items, 'UI', 17);
+    this.text(G, 'While you were away (' + U.formatTime(seconds) + '), your apprentices kept the shop running.',
+      area.x + 130, area.y + 10, area.w - 130, 26, COLORS.ink, 'left', P.items, 'UI', 17);
+    this.icon(G, 'icon_coin', area.x + area.w / 2 - 80, area.y + 190, 64, P.items, 'UI', 17);
+    this.text(G, '+' + U.formatGold(gold), area.x + area.w / 2 - 40, area.y + 166, 240, 48, COLORS.gold, 'left', P.items,
+      'UI', 17, '60;36;20');
+    this.button(G, P, area.x + area.w / 2 - 150, area.y + 270, 300, 80, 'BtnGreen', 'Collect', {
+      size: 36,
+      icon: 'icon_coin',
+      onTap: () => {
+        G.addGold(gold);
+        PS.Audio.play(G, 'coin');
+        G.saveNow();
+        this.close(G);
+      },
     });
   },
 
@@ -1037,7 +1073,7 @@ PS.UI = {
     const p = PS.proj.toScreen(x, y, 80);
     if (!p) return;
     const locked = G.state.level < u.minShopLevel;
-    const label = locked ? 'Lv ' + u.minShopLevel : String(G.upgradeCost(u));
+    const label = locked ? 'Lv ' + u.minShopLevel : U.formatGold(G.upgradeCost(u));
     if (!slot.tag || slot.tagLabel !== label) {
       if (slot.tag) slot.tag.forEach((o) => PS.destroy(o));
       slot.tag = [];
@@ -1125,6 +1161,7 @@ PS.UI = {
   },
 
   tap(G, x, y) {
+    if (PS.Tutorial.handleTap(G, x, y)) return;
     const P = G.ui.panel;
     if (P) {
       for (let i = P.hits.length - 1; i >= 0; i--) {

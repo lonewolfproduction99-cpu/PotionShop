@@ -218,46 +218,59 @@ def build_exterior():
 
 # ------------------------------------------------------------------ furniture
 def build_cauldron():
+    """Round iron cauldron on a stone fire pit. The liquid is a separate model."""
     m = Model("cauldron")
-    # Stone fire pit
-    for (x, y, w, d) in ((-36, -36, 72, 12), (-36, 24, 72, 12), (-36, -24, 12, 48), (24, -24, 12, 48)):
-        m.box(x, y, 0, w, d, 9, {"all": "stone_big", "top": "stone"})
-    m.box(-24, -24, 0, 48, 48, 3, {"all": "ember"}, unlit=True)
-    # Logs
-    m.box(-22, -4, 3, 44, 8, 7, {"all": "solid:5a3a20", "east": "solid:c8a070", "west": "solid:c8a070"})
-    m.box(-4, -22, 3, 8, 44, 7, {"all": "solid:4a3018", "north": "solid:c8a070", "south": "solid:c8a070"})
-    # Flames peeking out
-    for (x, y, h) in ((-18, 14, 12), (-8, 18, 16), (6, 16, 13), (16, 12, 10), (-16, -16, 10), (14, -14, 12)):
-        m.box(x - 3, y - 3, 6, 6, 6, h, {"all": "flame"}, unlit=True, ao=False)
-    # Legs
+    # Stone fire pit (ring of blocks) with logs, embers and flames
+    for k in range(10):
+        a = 2 * math.pi * k / 10
+        x, y = 30 * math.cos(a), 30 * math.sin(a)
+        m.box(x - 7, y - 7, 0, 14, 14, 8 + (k % 2) * 2, {"all": "stone_big", "top": "stone"}, rot=(0, 0, math.degrees(a)))
+    m.disc(0, 0, 0.5, 26, "ember", segments=12, unlit=True)
+    m.box(-22, -4, 2, 44, 8, 7, {"all": "solid:5a3a20", "east": "solid:c8a070", "west": "solid:c8a070"}, rot=(0, 0, 20))
+    m.box(-4, -22, 2, 8, 44, 7, {"all": "solid:4a3018", "north": "solid:c8a070", "south": "solid:c8a070"}, rot=(0, 0, 20))
+    for (x, y, h) in ((-16, 14, 13), (-6, 19, 17), (8, 17, 14), (17, 10, 11), (-15, -14, 11), (13, -14, 13), (0, -18, 10)):
+        m.box(x - 3, y - 3, 5, 6, 6, h, {"all": "flame"}, unlit=True, ao=False)
+    # Three stubby legs
+    for k in range(3):
+        a = 2 * math.pi * k / 3 + 0.5
+        m.box(19 * math.cos(a) - 3, 19 * math.sin(a) - 3, 2, 6, 6, 14, {"all": "metal_plain:2e3036"})
+    # Pot: bulging body, neck and a thick rim
+    pot = "cauldron"
+    m.lathe(0, 0, [(12, 12), (16, 22), (22, 28), (31, 31), (40, 29), (46, 26)], pot, segments=16)
+    m.disc(0, 0, 12, 12, "metal_plain:2e3036", segments=16)
+    m.lathe(0, 0, [(46, 26), (49, 31), (54, 31)], "metal_plain:4a4e58", segments=16)
+    m.ring(0, 0, 54, 24, 31, "metal_plain:5a5e68", segments=16)
+    m.lathe(0, 0, [(38, 24), (54, 24)], "metal_plain:1e1e24", segments=16, inward=True)
+    m.disc(0, 0, 38, 24, "solid:1a1418", segments=16)
+    # Riveted metal bands
+    m.lathe(0, 0, [(24, 29.2), (27, 30.6)], "metal:6a6e78", segments=16)
+    m.lathe(0, 0, [(35, 30.6), (38, 29.8)], "metal:6a6e78", segments=16)
+    # Ring handles
     for sx in (-1, 1):
-        for sy in (-1, 1):
-            m.box(sx * 20 - 3, sy * 20 - 3, 3, 6, 6, 12, {"all": "metal_plain:2e3036"})
-    # Pot body: blocky rounded square ring
-    pot = {"all": "cauldron", "top": "metal_plain:2e3036"}
-    m.box(-22, -22, 12, 44, 44, 6, pot)  # bottom
-    m.box(-28, -24, 18, 56, 48, 30, pot)
-    m.box(-24, -28, 18, 48, 56, 30, pot)
-    m.box(-26, -26, 16, 52, 52, 4, pot)
-    # Rim (ring of four boxes)
-    rim = {"all": "metal_plain:3a3d44", "top": "metal_plain:4a4e58"}
-    m.box(-30, -30, 48, 60, 7, 6, rim)
-    m.box(-30, 23, 48, 60, 7, 6, rim)
-    m.box(-30, -23, 48, 7, 46, 6, rim)
-    m.box(23, -23, 48, 7, 46, 6, rim)
-    # Metal bands with rivets
-    for z in (24, 38):
-        m.box(-28.6, -24.6, z, 57.2, 49.2, 3, {"all": "metal:6a6e78"}, faces=["east", "west"])
-        m.box(-24.6, -28.6, z, 49.2, 57.2, 3, {"all": "metal:6a6e78"}, faces=["north", "south"])
-    # Handles
-    for sx in (-1, 1):
-        m.box(sx * 31 - 2, -6, 40, 4, 12, 3, {"all": "metal_plain:4a4e58"})
-        m.box(sx * 33 - 1.5, -6, 32, 3, 3, 10, {"all": "metal_plain:4a4e58"})
-        m.box(sx * 33 - 1.5, 3, 32, 3, 3, 10, {"all": "metal_plain:4a4e58"})
-    # Interior (dark) below the liquid level
-    m.box(-23, -23, 18, 46, 46, 28, {"top": "solid:1a1418"}, faces=["top"])
-    # Ladle leaning in the pot
-    m.box(6, -4, 44, 4, 4, 34, {"all": "wood_light"}, rot=(0, 20, 0), pivot=(8, -2, 44))
+        m.box(sx * 32 - 2, -6, 40, 4, 12, 3, {"all": "metal_plain:4a4e58"})
+        m.box(sx * 34 - 1.5, -6, 31, 3, 3, 10, {"all": "metal_plain:4a4e58"})
+        m.box(sx * 34 - 1.5, 3, 31, 3, 3, 10, {"all": "metal_plain:4a4e58"})
+    # Wooden ladle leaning in the pot
+    m.box(6, -4, 42, 4, 4, 36, {"all": "wood_light"}, rot=(0, 20, 0), pivot=(8, -2, 42))
+    return m
+
+
+def build_liquid():
+    """Round liquid surface for the cauldron (white, tinted per potion at runtime)."""
+    m = Model("liquid")
+    m.disc(0, 0, 0, 24, "liquid:e8e8e8", segments=16, unlit=True)
+    m.lathe(0, 0, [(-3, 24), (0, 24)], "liquid:c8c8c8", segments=16, unlit=True)
+    return m
+
+
+def build_held_bottle():
+    """Potion bottle carried by workers (liquid tinted per potion at runtime)."""
+    m = Model("held_bottle")
+    m.lathe(0, 0, [(0, 4.5), (2, 6), (7, 6), (10, 4)], "glass:ffffff:0.1", segments=10)
+    m.lathe(0, 0, [(0.3, 4.2), (1.8, 5.6), (6.2, 5.6)], "solid:ffffff", segments=10, unlit=True)
+    m.disc(0, 0, 6.2, 5.6, "solid:ffffff", segments=10, unlit=True)
+    m.cyl(0, 0, 10, 2.2, 4, {"side": "glass:ffffff:0.1", "top": "glass:ffffff:0.1"}, segments=8)
+    m.cyl(0, 0, 14, 2.6, 2.5, {"side": "wood_light", "top": "wood_light"}, segments=8)
     return m
 
 
@@ -602,6 +615,8 @@ BUILDERS = {
     "plant": build_plant,
     "candelabra": build_candelabra,
     "slot_sign": build_slot_table,
+    "liquid": build_liquid,
+    "held_bottle": build_held_bottle,
     "garden": build_garden,
     "plot": build_plot,
 }

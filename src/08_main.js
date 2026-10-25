@@ -13,6 +13,15 @@ PS.Audio = {
     buy: 'sfx_buy.wav',
     levelup: 'sfx_levelup.wav',
   },
+  // Background music on its own channel (starts after the first tap on phones).
+  music(G) {
+    try {
+      if (G.settings.music) gdjs.evtTools.sound.playMusicOnChannel(G.scene, 'music_shop.wav', 1, true, 30, 1);
+      else gdjs.evtTools.sound.stopMusicOnChannel(G.scene, 1);
+    } catch (e) {
+      // Music is optional.
+    }
+  },
   play(G, name) {
     if (!G.settings || !G.settings.sound) return;
     const file = this.SOUNDS[name];
@@ -46,10 +55,12 @@ PS.Game = class {
     this.state.workers.forEach((record, i) => PS.Workers.createApprentice(this, i + 1, record));
     PS.UI.init(this);
     this.setShadows(this.settings.shadows);
+    PS.Tutorial.init(this);
+    PS.Audio.music(this);
+    this.checkOffline();
+    this.incomeTimer = 0;
+    this.earnedMark = this.state.earned;
     this.started = true;
-    if (this.state.served === 0 && this.state.gold === PS.data.balance.startGold) {
-      PS.UI.toast(this, 'Welcome! Tap a seated customer to take their order.');
-    }
   }
 
   // ----- upgrade helpers
@@ -183,7 +194,19 @@ PS.Game = class {
     }
     return s;
   }
+  // Apprentices keep earning (at a reduced rate) while the game is closed,
+  // for up to two hours.
+  checkOffline() {
+    const s = this.state;
+    const apprentices = s.workers.length;
+    if (!apprentices || !s.lastSeen) return;
+    const seconds = Math.min((Date.now() - s.lastSeen) / 1000, 7200);
+    if (seconds < 120) return;
+    const gold = Math.round((seconds / 60) * s.incomeRate * (0.15 + 0.1 * apprentices));
+    if (gold > 0) PS.UI.open(this, 'offline', { gold, seconds });
+  }
   saveNow() {
+    this.state.lastSeen = Date.now();
     this.needSave = false;
     this.saveTimer = 0;
     PS.Save.save(this.snapshot());
@@ -196,7 +219,8 @@ PS.Game = class {
     } catch (e) {
       s = null;
     }
-    return { shadows: s && typeof s.shadows === 'boolean' ? s.shadows : true, sound: s && typeof s.sound === 'boolean' ? s.sound : true };
+    const flag = (k) => (s && typeof s[k] === 'boolean' ? s[k] : true);
+    return { shadows: flag('shadows'), sound: flag('sound'), music: flag('music') };
   }
   saveSettings() {
     gdjs.evtTools.storage.writeStringInJSONFile('PotionShop', 'settings', JSON.stringify(this.settings));
@@ -232,6 +256,15 @@ PS.Game = class {
       PS.FX.update(this, dt);
     }
     PS.UI.update(this, dt);
+    PS.Tutorial.update(this, dt);
+    // Recent income per minute (used for offline earnings).
+    this.incomeTimer += dt;
+    if (this.incomeTimer >= 60) {
+      const perMinute = ((this.state.earned - this.earnedMark) * 60) / this.incomeTimer;
+      this.state.incomeRate = this.state.incomeRate ? this.state.incomeRate * 0.6 + perMinute * 0.4 : perMinute;
+      this.incomeTimer = 0;
+      this.earnedMark = this.state.earned;
+    }
     this.saveTimer += dt;
     if (this.saveTimer > 8 && this.needSave) this.saveNow();
   }

@@ -73,6 +73,24 @@ PS.Workers = {
     return w;
   },
 
+  // A potion bottle in the worker's hands while carrying one.
+  updateHeldBottle(G, w) {
+    if (!w.carrying || w.carrying.id === 'sludge') {
+      if (w.bottle) w.bottle.hide(true);
+      return;
+    }
+    if (!w.bottle) w.bottle = PS.create(G.scene, 'HeldBottle', 0, 0, '');
+    if (w.bottleRecipe !== w.carrying.id) {
+      w.bottleRecipe = w.carrying.id;
+      PS.tint(w.bottle, w.carrying.color);
+    }
+    const a = (w.obj.getAngle() * Math.PI) / 180;
+    // Facing direction of a character with angle a is (-sin a, cos a).
+    w.bottle.hide(false);
+    w.bottle.setPosition(w.obj.getX() - Math.sin(a) * 15, w.obj.getY() + Math.cos(a) * 15);
+    w.bottle.setZ(PS.K.handZ + (w.anim === 'Carry' ? Math.abs(Math.sin(G.time * 10)) * 1.5 : 0));
+  },
+
   // Worker currently working on (or heading to) a target, if any.
   claimedBy(G, target) {
     for (const w of G.workers) {
@@ -285,6 +303,7 @@ PS.Workers = {
           this.think(G, w);
         }
       }
+      this.updateHeldBottle(G, w);
       const task = w.task;
       if (!task) {
         // Idle: go back to the worker's resting spot.

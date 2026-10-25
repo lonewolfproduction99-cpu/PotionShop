@@ -362,6 +362,14 @@ def icon(kind):
         ellipse(d, (8, 8, 88, 88), (250, 240, 220, 255), width=4)
         d.line([S(48), S(48), S(48), S(22)], fill=OUTLINE, width=S(6))
         d.line([S(48), S(48), S(66), S(58)], fill=OUTLINE, width=S(6))
+    elif kind == "hand":  # pointing hand for the tutorial (points down)
+        skin = (255, 222, 190, 255)
+        rrect(d, (30, 46, 70, 86), 14, skin, width=4)
+        rrect(d, (40, 6, 54, 60), 7, skin, width=4)
+        for x in (54, 64):
+            rrect(d, (x - 2, 40, x + 10, 62), 6, skin, width=3)
+        rrect(d, (20, 52, 34, 70), 7, skin, width=3)
+        rrect(d, (30, 84, 70, 94), 3, (90, 150, 220, 255), width=3)
     elif kind == "garden":
         rrect(d, (10, 56, 86, 88), 6, (130, 90, 50, 255), width=4)
         for x in (24, 48, 72):
@@ -548,7 +556,7 @@ def main():
     for name in ("coin", "heart", "star", "gear", "orders", "bag", "upgrades", "workers", "expand", "close",
                  "check", "plus", "lock", "hourglass", "broom", "brew", "order", "book", "sparkle", "exclaim",
                  "sound", "trash", "speed", "tables", "patience", "quality", "garden", "back", "goggles",
-                 "skull"):
+                 "skull", "hand"):
         icon(name).save(os.path.join(OUT, "icon_%s.png" % name))
     for name in ("happy", "neutral", "annoyed", "angry"):
         mood_icon(name).save(os.path.join(OUT, "mood_%s.png" % name))

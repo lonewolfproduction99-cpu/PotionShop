@@ -51,6 +51,8 @@ gdjs.ShopCode.GDApprenticeBrambleObjects1= [];
 gdjs.ShopCode.GDApprenticeBrambleObjects2= [];
 gdjs.ShopCode.GDLiquidObjects1= [];
 gdjs.ShopCode.GDLiquidObjects2= [];
+gdjs.ShopCode.GDHeldBottleObjects1= [];
+gdjs.ShopCode.GDHeldBottleObjects2= [];
 gdjs.ShopCode.GDSpillObjects1= [];
 gdjs.ShopCode.GDSpillObjects2= [];
 gdjs.ShopCode.GDBubbleObjects1= [];
@@ -95,7 +97,7 @@ gdjs.ShopCode.GDUiTextObjects1= [];
 gdjs.ShopCode.GDUiTextObjects2= [];
 
 
-gdjs.ShopCode.userFunc0x92e208 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8e6958 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game data =====
 // Recipes, ingredients, customer types and upgrades are stored in the
@@ -214,7 +216,7 @@ PS.xpForLevel = function (level) {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e2f8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8bacc0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: utilities =====
 // Math helpers, object helpers and the 3D -> screen projection used to place
@@ -231,7 +233,13 @@ PS.util = {
   facingAngle: (dx, dy) => (Math.atan2(dy, dx) * 180) / Math.PI - 90,
   // Smallest signed difference between two angles in degrees.
   angleDiff: (a, b) => ((((b - a) % 360) + 540) % 360) - 180,
-  formatGold: (n) => (n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n))),
+  // 950, 12.3k, 4.5M, 1.2B, 3.4T (prices grow very large after prestiges).
+  formatGold: (n) => {
+    if (n < 10000) return String(Math.floor(n));
+    const units = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']];
+    for (const [v, u] of units) if (n >= v) return (n / v).toFixed(n / v >= 100 ? 0 : 1) + u;
+    return String(Math.floor(n));
+  },
   formatTime: (s) => (s >= 60 ? Math.floor(s / 60) + 'm ' + Math.floor(s % 60) + 's' : Math.ceil(s) + 's'),
 };
 
@@ -241,10 +249,10 @@ PS.K = {
   tableStandX: 56, // where a worker stands beside a table (towards the aisle)
   tableStandY: -35,
   cauldronStandY: 78, // where a worker stands in front of a cauldron
-  liquidHalf: 31, // half size of the liquid surface inside a cauldron
-  liquidZ: 58,
-  liquidRise: 6,
-  potTop: 68,
+  liquidZ: 56, // liquid surface height inside a cauldron
+  liquidRise: 9,
+  potTop: 73,
+  handZ: 33, // height of a carried potion
   counterStandX: 40, // behind the counter
   counterStandY: -50,
   sitZ: -1.4, // character height offset when sitting on a chair
@@ -253,6 +261,26 @@ PS.K = {
   ringCauldron: 136,
   ringWorker: 124,
   carryZ: 114,
+};
+
+// Tint the unlit parts of a 3D model (liquids) without affecting other
+// instances of the same model.
+PS.tint = function (obj, rgb) {
+  const [r, g, b] = rgb.split(';').map((v) => Number(v) / 255);
+  obj.get3DRendererObject().traverse((node) => {
+    if (!node.isMesh) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    mats.forEach((m, i) => {
+      if (m.name !== 'unlit') return;
+      if (!m.userData.psOwn) {
+        m = m.clone();
+        m.userData.psOwn = true;
+        if (Array.isArray(node.material)) node.material[i] = m;
+        else node.material = m;
+      }
+      m.color.setRGB(r, g, b);
+    });
+  });
 };
 
 PS.create = function (runtimeScene, name, x, y, layer) {
@@ -327,7 +355,7 @@ PS.setupCamera = function (runtimeScene) {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e3c0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d44a8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: navigation =====
 // Characters walk on a grid built once at scene start. Blocked cells come from
@@ -515,7 +543,7 @@ PS.walk = function (ch, dt) {
     PS.turnToward(ch, dx, dy, dt);
     if (step >= d) ch.path.shift();
   }
-  PS.setAnim(ch, ch.path.length ? 'Walk' : ch.idleAnim || 'Idle');
+  PS.setAnim(ch, ch.path.length ? (ch.carrying ? 'Carry' : 'Walk') : ch.idleAnim || 'Idle');
   return ch.path.length === 0;
 };
 
@@ -543,7 +571,7 @@ PS.goTo = function (ch, x, y) {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e488 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d4570 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
@@ -562,7 +590,7 @@ PS.Save = {
   KEY: 'save',
   VERSION: 2,
   META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes',
-    'discovered', 'accidents'],
+    'discovered', 'accidents', 'tutorialDone', 'lastSeen', 'incomeRate'],
   RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers', 'garden'],
 
   defaults() {
@@ -590,6 +618,9 @@ PS.Save = {
       discovered: [], // recipes whose bonus herb was found
       accidents: 0,
       garden: [], // herb garden plots: { herb, readyAt (ms timestamp) }
+      tutorialDone: false,
+      lastSeen: 0, // time of the last save (ms), for offline earnings
+      incomeRate: 0, // recent gold earned per minute
     };
   },
 
@@ -622,6 +653,9 @@ PS.Save = {
     s.prestige = Math.floor(num(raw.prestige, 0, 0, 999));
     if (Array.isArray(raw.discovered)) s.discovered = raw.discovered.filter((id) => PS.data.recipeById[id]);
     s.accidents = Math.floor(num(raw.accidents, 0, 0, 1e9));
+    s.tutorialDone = raw.tutorialDone === true;
+    s.lastSeen = num(raw.lastSeen, 0, 0, 1e15);
+    s.incomeRate = num(raw.incomeRate, 0, 0, 1e12);
     if (Array.isArray(raw.garden)) {
       s.garden = raw.garden.slice(0, 16).map((p) => ({
         herb: p && PS.data.ingredientById[p.herb] ? p.herb : 'redleaf',
@@ -706,7 +740,7 @@ PS.Save = {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e5a8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d4690 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: shop world =====
 // Builds the shop from the scene instances (tables, cauldrons, waypoints),
@@ -820,7 +854,7 @@ PS.World = {
       c.unlocked = i < nc;
       c.obj.hide(!c.unlocked);
       if (c.unlocked && !c.liquid) {
-        c.liquid = PS.create(scene, 'Liquid', c.x - PS.K.liquidHalf, c.y - PS.K.liquidHalf, '');
+        c.liquid = PS.create(scene, 'Liquid', c.x, c.y, '');
         c.liquid.setZ(PS.K.liquidZ);
         c.liquid.hide(true);
       }
@@ -861,7 +895,9 @@ PS.World = {
       return;
     }
     const base = Math.max(b.spawnIntervalMin, b.spawnIntervalStart - (G.state.level - 1) * 0.8);
-    G.spawnTimer = base * U.rand(0.75, 1.25);
+    // Happy customers spread the word: a busier shop when satisfaction is high.
+    const word = 1.25 - 0.5 * (G.state.satisfaction / 100);
+    G.spawnTimer = base * word * U.rand(0.75, 1.25);
     this.spawnCustomer(G);
   },
 
@@ -1076,6 +1112,7 @@ PS.World = {
 // Small visual effects: rising bubbles and sparkles made of tiny 3D cubes.
 PS.FX = {
   bubble(G, x, y, z, color, rise, life, size) {
+    if (G.fx.length > 90) return; // keep effects cheap on phones
     const o = PS.create(G.scene, 'Bubble', x - size / 2, y - size / 2, '');
     o.setZ(z);
     o.setWidth(size);
@@ -1112,7 +1149,7 @@ PS.FX = {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e680 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d4768 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: workers and task queue =====
 // Every worker performs one physical task at a time.
@@ -1187,6 +1224,24 @@ PS.Workers = {
     PS.setAnim(w, 'Idle');
     G.workers.push(w);
     return w;
+  },
+
+  // A potion bottle in the worker's hands while carrying one.
+  updateHeldBottle(G, w) {
+    if (!w.carrying || w.carrying.id === 'sludge') {
+      if (w.bottle) w.bottle.hide(true);
+      return;
+    }
+    if (!w.bottle) w.bottle = PS.create(G.scene, 'HeldBottle', 0, 0, '');
+    if (w.bottleRecipe !== w.carrying.id) {
+      w.bottleRecipe = w.carrying.id;
+      PS.tint(w.bottle, w.carrying.color);
+    }
+    const a = (w.obj.getAngle() * Math.PI) / 180;
+    // Facing direction of a character with angle a is (-sin a, cos a).
+    w.bottle.hide(false);
+    w.bottle.setPosition(w.obj.getX() - Math.sin(a) * 15, w.obj.getY() + Math.cos(a) * 15);
+    w.bottle.setZ(PS.K.handZ + (w.anim === 'Carry' ? Math.abs(Math.sin(G.time * 10)) * 1.5 : 0));
   },
 
   // Worker currently working on (or heading to) a target, if any.
@@ -1401,6 +1456,7 @@ PS.Workers = {
           this.think(G, w);
         }
       }
+      this.updateHeldBottle(G, w);
       const task = w.task;
       if (!task) {
         // Idle: go back to the worker's resting spot.
@@ -1579,7 +1635,7 @@ PS.Workers = {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e758 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d4840 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: brewing =====
 // Cauldron states: idle -> reserved (ingredients paid, worker on the way)
@@ -1699,7 +1755,7 @@ PS.Brewing = {
     c.t = 0;
     c.dur = (c.recipe.brewTime * G.mult('quick_brew', -1)) / (c.speed || 1);
     c.liquid.hide(false);
-    c.liquid.setColor(c.recipe.color);
+    PS.tint(c.liquid, c.recipe.color);
     c.liquid.setZ(PS.K.liquidZ);
     if (c.discovered && !G.state.discovered.includes(c.recipe.id)) {
       G.state.discovered.push(c.recipe.id);
@@ -1729,7 +1785,7 @@ PS.Brewing = {
     const color = c.recipe.color;
     c.recipe = null;
     c.ingredients = [];
-    c.liquid.setColor('70;80;60');
+    PS.tint(c.liquid, '70;80;60');
     c.spill = PS.create(G.scene, 'Spill', c.x - 46, c.y + 26, '');
     c.spill.setZ(0.4);
     c.spill.setColor(color);
@@ -1772,7 +1828,7 @@ PS.Brewing = {
             unstable && Math.random() < 0.6 ? '60;60;70' : c.recipe.color, U.rand(30, unstable ? 110 : 60),
             U.rand(0.7, 1.2), U.rand(4, unstable ? 12 : 8));
         }
-        if (unstable) c.liquid.setColor(Math.sin(G.time * 18) > 0 ? c.recipe.color : '80;80;90');
+        if (unstable) PS.tint(c.liquid, Math.sin(G.time * 18) > 0 ? c.recipe.color : '80;80;90');
         if (c.t >= c.dur) {
           if (c.accident) {
             this.explode(G, c);
@@ -1860,7 +1916,7 @@ PS.Stock = {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e830 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d4918 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: interface =====
 // HUD (top), navigation (bottom), panels (brew, orders, ingredients,
@@ -2171,6 +2227,8 @@ PS.UI = {
         return this.buildStats(G, P);
       case 'levelup':
         return this.buildLevelUp(G, P);
+      case 'offline':
+        return this.buildOffline(G, P);
     }
   },
 
@@ -2347,7 +2405,7 @@ PS.UI = {
       this.text(G, status, x + 90, y + 84, 300, 20, col, 'left', P.items, 'UI', 17);
       const pay = Math.round(r.price * G.mult('fine_bottles', +1) * c.type.tip * (1 + PS.data.balance.tipMax * ratio));
       this.icon(G, 'icon_coin', x + w - 196, y + 26, 30, P.items, 'UI', 17);
-      this.text(G, pay + 'g', x + w - 178, y + 12, 70, 26, '170;120;20', 'left', P.items, 'UI', 17);
+      this.text(G, U.formatGold(pay) + 'g', x + w - 178, y + 12, 70, 26, '170;120;20', 'left', P.items, 'UI', 17);
       if (c.state === 'waitingOrder') {
         this.button(G, P, x + w - 150, y + h - 62, 140, 54, 'BtnBlue', 'Take', {
           size: 26,
@@ -2412,7 +2470,7 @@ PS.UI = {
         n <= 2 ? COLORS.red : COLORS.green,
         'left', P.items, 'UI', 17);
       const cost = ing.cost * ing.bundle;
-      this.button(G, P, x + w - 200, y + 14, 190, h - 28, 'BtnGold', '+' + ing.bundle + '  ' + cost + 'g', {
+      this.button(G, P, x + w - 200, y + 14, 190, h - 28, 'BtnGold', '+' + ing.bundle + '  ' + U.formatGold(cost) + 'g', {
         tag: 'buy:' + ing.id,
         size: 26,
         disabled: G.state.gold < cost || full,
@@ -2450,7 +2508,7 @@ PS.UI = {
       } else if (maxed) {
         this.text(G, 'MAX', x + w - 190, y + h / 2 - 18, 170, 32, COLORS.green, 'center', P.items, 'UI', 17);
       } else {
-        this.button(G, P, x + w - 200, y + h / 2 - 34, 190, 68, 'BtnGold', cost + 'g', {
+        this.button(G, P, x + w - 200, y + h / 2 - 34, 190, 68, 'BtnGold', U.formatGold(cost) + 'g', {
           tag: 'upgrade:' + u.id,
           icon: 'icon_coin',
           iconSize: 36,
@@ -2512,7 +2570,7 @@ PS.UI = {
             return;
           }
           const cost = G.workerUpgradeCost(index, id);
-          this.button(G, P, bx, by + 28, bw, 60, 'BtnGold', cost + 'g', {
+          this.button(G, P, bx, by + 28, bw, 60, 'BtnGold', U.formatGold(cost) + 'g', {
             tag: 'wup:' + index + ':' + id,
             icon: ic,
             iconSize: 32,
@@ -2543,7 +2601,7 @@ PS.UI = {
         : 'Takes orders, brews and delivers on their own.', x + 90, y + 52, w - 330, 22,
         locked ? '235;235;235' : COLORS.muted, 'left', P.items, 'UI', 17);
       if (!locked) {
-        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', next.hireCost + 'g', {
+        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', U.formatGold(next.hireCost) + 'g', {
           tag: 'hire',
           icon: 'icon_coin',
           iconSize: 36,
@@ -2579,11 +2637,23 @@ PS.UI = {
       },
     });
     y += 96;
-    this.button(G, P, area.x, y, area.w, 80, 'BtnPurple', G.settings.sound ? 'Sound: ON' : 'Sound: OFF', {
+    const half = (area.w - 16) / 2;
+    this.button(G, P, area.x, y, half, 80, 'BtnPurple', G.settings.sound ? 'Sounds: ON' : 'Sounds: OFF', {
       icon: 'icon_sound',
+      size: 26,
       onTap: () => {
         G.settings.sound = !G.settings.sound;
         G.saveSettings();
+        this.rebuild(G);
+      },
+    });
+    this.button(G, P, area.x + half + 16, y, half, 80, 'BtnPurple', G.settings.music ? 'Music: ON' : 'Music: OFF', {
+      icon: 'icon_sound',
+      size: 26,
+      onTap: () => {
+        G.settings.music = !G.settings.music;
+        G.saveSettings();
+        PS.Audio.music(G);
         this.rebuild(G);
       },
     });
@@ -2601,7 +2671,7 @@ PS.UI = {
       },
     });
     y += 100;
-    this.text(G, 'Potion Shop · Milestone 1 build · progress saves automatically', area.x, y, area.w, 20, COLORS.muted,
+    this.text(G, 'Potion Shop · progress saves automatically', area.x, y, area.w, 20, COLORS.muted,
       'center', P.items, 'UI', 16);
   },
 
@@ -2618,6 +2688,28 @@ PS.UI = {
     lines.forEach(([ic, t], i) => {
       this.icon(G, ic, area.x + 28, area.y + 26 + i * 64, 46, P.items, 'UI', 17);
       this.text(G, t, area.x + 64, area.y + 10 + i * 64, area.w - 70, 28, COLORS.ink, 'left', P.items, 'UI', 17);
+    });
+  },
+
+  // Gold earned by the apprentices while the game was closed.
+  buildOffline(G, P) {
+    const area = this.frame(G, P, 'Welcome back!', 520);
+    const { gold, seconds } = P.params;
+    this.icon(G, 'icon_workers', area.x + 60, area.y + 70, 100, P.items, 'UI', 17);
+    this.text(G, 'While you were away (' + U.formatTime(seconds) + '), your apprentices kept the shop running.',
+      area.x + 130, area.y + 10, area.w - 130, 26, COLORS.ink, 'left', P.items, 'UI', 17);
+    this.icon(G, 'icon_coin', area.x + area.w / 2 - 80, area.y + 190, 64, P.items, 'UI', 17);
+    this.text(G, '+' + U.formatGold(gold), area.x + area.w / 2 - 40, area.y + 166, 240, 48, COLORS.gold, 'left', P.items,
+      'UI', 17, '60;36;20');
+    this.button(G, P, area.x + area.w / 2 - 150, area.y + 270, 300, 80, 'BtnGreen', 'Collect', {
+      size: 36,
+      icon: 'icon_coin',
+      onTap: () => {
+        G.addGold(gold);
+        PS.Audio.play(G, 'coin');
+        G.saveNow();
+        this.close(G);
+      },
     });
   },
 
@@ -2901,7 +2993,7 @@ PS.UI = {
     const p = PS.proj.toScreen(x, y, 80);
     if (!p) return;
     const locked = G.state.level < u.minShopLevel;
-    const label = locked ? 'Lv ' + u.minShopLevel : String(G.upgradeCost(u));
+    const label = locked ? 'Lv ' + u.minShopLevel : U.formatGold(G.upgradeCost(u));
     if (!slot.tag || slot.tagLabel !== label) {
       if (slot.tag) slot.tag.forEach((o) => PS.destroy(o));
       slot.tag = [];
@@ -2989,6 +3081,7 @@ PS.UI = {
   },
 
   tap(G, x, y) {
+    if (PS.Tutorial.handleTap(G, x, y)) return;
     const P = G.ui.panel;
     if (P) {
       for (let i = P.hits.length - 1; i >= 0; i--) {
@@ -3139,7 +3232,7 @@ PS.Input = {
 };
 
 };
-gdjs.ShopCode.userFunc0x92e908 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d49f0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game state, progression and main loop =====
 const PS = gdjs.PotionShop;
@@ -3155,6 +3248,15 @@ PS.Audio = {
     angry: 'sfx_angry.wav',
     buy: 'sfx_buy.wav',
     levelup: 'sfx_levelup.wav',
+  },
+  // Background music on its own channel (starts after the first tap on phones).
+  music(G) {
+    try {
+      if (G.settings.music) gdjs.evtTools.sound.playMusicOnChannel(G.scene, 'music_shop.wav', 1, true, 30, 1);
+      else gdjs.evtTools.sound.stopMusicOnChannel(G.scene, 1);
+    } catch (e) {
+      // Music is optional.
+    }
   },
   play(G, name) {
     if (!G.settings || !G.settings.sound) return;
@@ -3189,10 +3291,12 @@ PS.Game = class {
     this.state.workers.forEach((record, i) => PS.Workers.createApprentice(this, i + 1, record));
     PS.UI.init(this);
     this.setShadows(this.settings.shadows);
+    PS.Tutorial.init(this);
+    PS.Audio.music(this);
+    this.checkOffline();
+    this.incomeTimer = 0;
+    this.earnedMark = this.state.earned;
     this.started = true;
-    if (this.state.served === 0 && this.state.gold === PS.data.balance.startGold) {
-      PS.UI.toast(this, 'Welcome! Tap a seated customer to take their order.');
-    }
   }
 
   // ----- upgrade helpers
@@ -3326,7 +3430,19 @@ PS.Game = class {
     }
     return s;
   }
+  // Apprentices keep earning (at a reduced rate) while the game is closed,
+  // for up to two hours.
+  checkOffline() {
+    const s = this.state;
+    const apprentices = s.workers.length;
+    if (!apprentices || !s.lastSeen) return;
+    const seconds = Math.min((Date.now() - s.lastSeen) / 1000, 7200);
+    if (seconds < 120) return;
+    const gold = Math.round((seconds / 60) * s.incomeRate * (0.15 + 0.1 * apprentices));
+    if (gold > 0) PS.UI.open(this, 'offline', { gold, seconds });
+  }
   saveNow() {
+    this.state.lastSeen = Date.now();
     this.needSave = false;
     this.saveTimer = 0;
     PS.Save.save(this.snapshot());
@@ -3339,7 +3455,8 @@ PS.Game = class {
     } catch (e) {
       s = null;
     }
-    return { shadows: s && typeof s.shadows === 'boolean' ? s.shadows : true, sound: s && typeof s.sound === 'boolean' ? s.sound : true };
+    const flag = (k) => (s && typeof s[k] === 'boolean' ? s[k] : true);
+    return { shadows: flag('shadows'), sound: flag('sound'), music: flag('music') };
   }
   saveSettings() {
     gdjs.evtTools.storage.writeStringInJSONFile('PotionShop', 'settings', JSON.stringify(this.settings));
@@ -3375,13 +3492,129 @@ PS.Game = class {
       PS.FX.update(this, dt);
     }
     PS.UI.update(this, dt);
+    PS.Tutorial.update(this, dt);
+    // Recent income per minute (used for offline earnings).
+    this.incomeTimer += dt;
+    if (this.incomeTimer >= 60) {
+      const perMinute = ((this.state.earned - this.earnedMark) * 60) / this.incomeTimer;
+      this.state.incomeRate = this.state.incomeRate ? this.state.incomeRate * 0.6 + perMinute * 0.4 : perMinute;
+      this.incomeTimer = 0;
+      this.earnedMark = this.state.earned;
+    }
     this.saveTimer += dt;
     if (this.saveTimer > 8 && this.needSave) this.saveNow();
   }
 };
 
 };
-gdjs.ShopCode.userFunc0x92e9e0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9d4ac8 = function GDJSInlineCode(runtimeScene) {
+"use strict";
+// ===== Potion Shop: first-time tutorial =====
+// Guides a new player through the first order: a bouncing hand points at
+// what to tap next and a banner explains it. The step is chosen from the
+// game state every frame, so the tutorial adapts to whatever the player does.
+// It ends after the first potion is delivered (or when skipped).
+const PS = gdjs.PotionShop;
+const U = PS.util;
+
+PS.Tutorial = {
+  init(G) {
+    G.tutorial = { active: !G.state.tutorialDone && G.state.served === 0, items: [], finishTimer: 0, last: '' };
+    if (!G.tutorial.active) G.state.tutorialDone = true;
+  },
+
+  finish(G) {
+    G.tutorial.active = false;
+    G.state.tutorialDone = true;
+    G.tutorial.items.forEach((o) => PS.destroy(o));
+    G.tutorial.items = [];
+    G.saveNow();
+  },
+
+  // What to point at: { text, world: [x, y, z] } or { text, screen: [x, y] }.
+  step(G) {
+    const T = G.tutorial;
+    if (T.finishTimer > 0) return { text: 'Great job! Earn gold, buy herbs and upgrades, and grow your shop.' };
+    const P = G.ui.panel;
+    const ordered = G.customers.filter((c) => c.state === 'ordered');
+    const ready = G.cauldrons.find((k) => k.unlocked && k.state === 'done');
+    const owner = G.owner;
+    if (owner.carrying) return { text: 'The owner delivers the potion to the customer who ordered it first.' };
+    if (ready && !PS.Workers.isQueued(G, 'collect', ready)) {
+      return { text: 'The potion is ready! Tap the cauldron to collect and deliver it.', world: [ready.x, ready.y, PS.K.ringCauldron] };
+    }
+    if (P && P.name === 'brew') {
+      const h = P.hits.find((x) => x.label === 'BREW');
+      if (h) return { text: 'The recipe is filled in for you. Press BREW!', screen: [h.x + h.w / 2, h.y + 4] };
+    }
+    if (P) return { text: 'Close this panel to get back to the shop.' };
+    const brewing = G.cauldrons.find((k) => k.state === 'brewing' || k.state === 'reserved');
+    if (brewing) return { text: 'Brewing! The circular ring shows the progress.' };
+    const idle = PS.Brewing.idleCauldron(G);
+    const uncovered = ordered.find((c) => PS.Brewing.plannedFor(G, c.recipe.id) === 0);
+    if (uncovered && idle) {
+      const name = uncovered.recipe.name;
+      const article = /^[AEIOU]/.test(name) ? 'an ' : 'a ';
+      return { text: 'They want ' + article + name + '. Tap the cauldron to brew it.', world: [idle.x, idle.y, 90] };
+    }
+    const seated = G.customers.find((c) => c.state === 'waitingOrder');
+    if (seated) {
+      if (PS.Workers.isQueued(G, 'takeOrder', seated)) return { text: 'The owner is on the way to take the order.' };
+      return { text: 'A customer is waiting! Tap them to take their order.', world: [seated.obj.getX(), seated.obj.getY(), PS.K.headSeated + 40] };
+    }
+    return { text: 'Welcome to your potion shop! A customer is on the way...' };
+  },
+
+  update(G, dt) {
+    const T = G.tutorial;
+    if (!T || !T.active) return;
+    if (G.state.served > 0 && T.finishTimer <= 0) T.finishTimer = 5;
+    if (T.finishTimer > 0) {
+      T.finishTimer -= dt;
+      if (T.finishTimer <= 0) return this.finish(G);
+    }
+    const s = this.step(G);
+    const UI = PS.UI;
+    const W = UI.W(G);
+    const H = UI.H(G);
+    if (s.text !== T.last) {
+      // Rebuild the banner when the message changes.
+      T.items.forEach((o) => PS.destroy(o));
+      T.items = [];
+      T.last = s.text;
+      const y = H - 126 - 92;
+      UI.panelBox(G, 'PanelDark', 14, y, W - 28, 82, T.items, 50);
+      UI.icon(G, 'icon_book', 52, y + 41, 52, T.items, 'UI', 51);
+      UI.text(G, s.text, 86, y + 12, W - 230, 25, '255;255;255', 'left', T.items, 'UI', 51);
+      T.skip = { x: W - 130, y: y + 18, w: 104, h: 46 };
+      UI.panelBox(G, 'BtnGray', T.skip.x, T.skip.y, T.skip.w, T.skip.h, T.items, 51);
+      UI.text(G, 'Skip', T.skip.x, T.skip.y + 9, T.skip.w, 24, '255;255;255', 'center', T.items, 'UI', 52);
+      T.hand = UI.icon(G, 'icon_hand', 0, 0, 72, T.items, 'UI', 55);
+    }
+    let target = null;
+    if (s.world) target = PS.proj.toScreen(s.world[0], s.world[1], s.world[2]);
+    else if (s.screen) target = s.screen;
+    T.hand.hide(!target);
+    if (target) {
+      const bob = Math.abs(Math.sin(G.time * 5)) * 14;
+      T.hand.setPosition(target[0] - 36, target[1] - 78 - bob);
+    }
+  },
+
+  // The Skip button is checked before other taps.
+  handleTap(G, x, y) {
+    const T = G.tutorial;
+    if (!T || !T.active || !T.skip) return false;
+    if (PS.UI.inside(T.skip, x, y)) {
+      this.finish(G);
+      return true;
+    }
+    return false;
+  },
+};
+
+};
+gdjs.ShopCode.userFunc0x8ba4a8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // Create the game once the systems above are defined.
 const PS = gdjs.PotionShop;
@@ -3400,7 +3633,7 @@ gdjs.ShopCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.ShopCode.userFunc0x92e208(runtimeScene);
+gdjs.ShopCode.userFunc0x8e6958(runtimeScene);
 
 }
 
@@ -3408,7 +3641,7 @@ gdjs.ShopCode.userFunc0x92e208(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e2f8(runtimeScene);
+gdjs.ShopCode.userFunc0x8bacc0(runtimeScene);
 
 }
 
@@ -3416,7 +3649,7 @@ gdjs.ShopCode.userFunc0x92e2f8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e3c0(runtimeScene);
+gdjs.ShopCode.userFunc0x9d44a8(runtimeScene);
 
 }
 
@@ -3424,7 +3657,7 @@ gdjs.ShopCode.userFunc0x92e3c0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e488(runtimeScene);
+gdjs.ShopCode.userFunc0x9d4570(runtimeScene);
 
 }
 
@@ -3432,7 +3665,7 @@ gdjs.ShopCode.userFunc0x92e488(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e5a8(runtimeScene);
+gdjs.ShopCode.userFunc0x9d4690(runtimeScene);
 
 }
 
@@ -3440,7 +3673,7 @@ gdjs.ShopCode.userFunc0x92e5a8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e680(runtimeScene);
+gdjs.ShopCode.userFunc0x9d4768(runtimeScene);
 
 }
 
@@ -3448,7 +3681,7 @@ gdjs.ShopCode.userFunc0x92e680(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e758(runtimeScene);
+gdjs.ShopCode.userFunc0x9d4840(runtimeScene);
 
 }
 
@@ -3456,7 +3689,7 @@ gdjs.ShopCode.userFunc0x92e758(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e830(runtimeScene);
+gdjs.ShopCode.userFunc0x9d4918(runtimeScene);
 
 }
 
@@ -3464,7 +3697,7 @@ gdjs.ShopCode.userFunc0x92e830(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e908(runtimeScene);
+gdjs.ShopCode.userFunc0x9d49f0(runtimeScene);
 
 }
 
@@ -3472,12 +3705,20 @@ gdjs.ShopCode.userFunc0x92e908(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x92e9e0(runtimeScene);
+gdjs.ShopCode.userFunc0x9d4ac8(runtimeScene);
 
 }
 
 
-};gdjs.ShopCode.userFunc0x8ba058 = function GDJSInlineCode(runtimeScene) {
+{
+
+
+gdjs.ShopCode.userFunc0x8ba4a8(runtimeScene);
+
+}
+
+
+};gdjs.ShopCode.userFunc0x9d1170 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const game = runtimeScene.__potionShop;
 if (game) game.update();
@@ -3503,7 +3744,7 @@ gdjs.ShopCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.ShopCode.userFunc0x8ba058(runtimeScene);
+gdjs.ShopCode.userFunc0x9d1170(runtimeScene);
 
 }
 
@@ -3563,6 +3804,8 @@ gdjs.ShopCode.GDApprenticeBrambleObjects1.length = 0;
 gdjs.ShopCode.GDApprenticeBrambleObjects2.length = 0;
 gdjs.ShopCode.GDLiquidObjects1.length = 0;
 gdjs.ShopCode.GDLiquidObjects2.length = 0;
+gdjs.ShopCode.GDHeldBottleObjects1.length = 0;
+gdjs.ShopCode.GDHeldBottleObjects2.length = 0;
 gdjs.ShopCode.GDSpillObjects1.length = 0;
 gdjs.ShopCode.GDSpillObjects2.length = 0;
 gdjs.ShopCode.GDBubbleObjects1.length = 0;
@@ -3657,6 +3900,8 @@ gdjs.ShopCode.GDApprenticeBrambleObjects1.length = 0;
 gdjs.ShopCode.GDApprenticeBrambleObjects2.length = 0;
 gdjs.ShopCode.GDLiquidObjects1.length = 0;
 gdjs.ShopCode.GDLiquidObjects2.length = 0;
+gdjs.ShopCode.GDHeldBottleObjects1.length = 0;
+gdjs.ShopCode.GDHeldBottleObjects2.length = 0;
 gdjs.ShopCode.GDSpillObjects1.length = 0;
 gdjs.ShopCode.GDSpillObjects2.length = 0;
 gdjs.ShopCode.GDBubbleObjects1.length = 0;

@@ -66,6 +66,16 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
   - Plots regrow in 45 seconds of real time, and rare herbs glow. The well gives Moonwater.
   - Herbs go into the shop's pantry.
 
+## Polish (Milestone 5)
+
+- **First-time tutorial:** a bouncing hand and a banner guide new players through their first order, brew and delivery. The steps adapt to what the player does, and there's a Skip button.
+- **Art:** a round iron cauldron on a stone fire pit. Its liquid takes each potion's color and flickers dark before an accident. Workers carry a real bottle in their hands, with a carrying pose.
+- **Audio:** a cozy background music loop, with separate Sounds and Music switches in Settings.
+- **Offline earnings:** with at least one apprentice, the shop earns part of your recent income while the game is closed, up to 2 hours. A "Welcome back!" panel collects it.
+- **Busier when happy:** high satisfaction brings customers a little more often.
+- **Big numbers** display as 12.3k, 4.6M, 1.2B and 3.4T, ready for prestige costs.
+- **Performance:** the number of effect particles is capped. Shadows can be turned off in Settings.
+
 ## Project structure
 
 | Path | What it is |
@@ -91,10 +101,10 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 ```
 python3 tools/build_models.py    # 3D models   -> game/assets/models
 python3 tools/build_ui.py        # UI images   -> game/assets/ui
-python3 tools/build_sfx.py       # sounds      -> game/assets/sfx
+python3 tools/build_sfx.py       # sounds and music -> game/assets/sfx
 python3 tools/build_project.py   # GDevelop project (embeds src/*.js as events)
 tools/export.sh <GDevelop portable app dir> docs   # HTML5 export with the official GDevelop CLI
-node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, bot, showcase)
+node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, bot, showcase)
 ```
 
 Note: `build_project.py` regenerates `game/PotionShop.json`. If you edit the project in GDevelop, keep working in GDevelop or port your changes back to the tools.

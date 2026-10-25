@@ -73,5 +73,62 @@ def main():
     write("sfx_levelup.wav", seq(*[tone(f, 0.11, "square", 0.22) * env(int(SR * 0.11), release=0.08) for f in notes]))
 
 
+def music():
+    """A gentle 16-bar loop (C - Am - F - G) with bass, arpeggios and a soft melody."""
+    sr = 22050
+    bpm = 96
+    beat = 60 / bpm
+    bars = 16
+    total = int(sr * beat * 4 * bars)
+    out = np.zeros(total)
+    t_all = np.arange(total) / sr
+
+    def note(freq, start, dur, vol, kind="sine", attack=0.01, release=0.25):
+        i0 = int(start * sr)
+        n = int(dur * sr)
+        if i0 >= total:
+            return
+        n = min(n, total - i0)
+        t = np.arange(n) / sr
+        ph = 2 * np.pi * freq * t
+        if kind == "tri":
+            w = 2 / np.pi * np.arcsin(np.sin(ph))
+        elif kind == "pluck":
+            w = (np.sin(ph) + 0.4 * np.sin(2 * ph) + 0.15 * np.sin(3 * ph)) * np.exp(-t * 5)
+        else:
+            w = np.sin(ph) + 0.25 * np.sin(2 * ph)
+        e = np.clip(t / attack, 0, 1) * np.clip((dur - t) / release, 0, 1)
+        out[i0:i0 + n] += w * e * vol
+
+    hz = lambda m: 440 * 2 ** ((m - 69) / 12)
+    chords = [[48, 52, 55], [45, 48, 52], [41, 45, 48], [43, 47, 50]]  # C, Am, F, G
+    melody = [76, 74, 72, 74, 76, 76, 76, None, 74, 74, 74, None, 76, 79, 79, None,
+              76, 74, 72, 74, 76, 76, 76, 76, 74, 74, 76, 74, 72, None, None, None]
+    for bar in range(bars):
+        ch = chords[(bar // 2) % 4]
+        t0 = bar * 4 * beat
+        note(hz(ch[0] - 12), t0, beat * 2, 0.22, "sine", release=0.4)
+        note(hz(ch[0] - 12), t0 + beat * 2, beat * 2, 0.18, "sine", release=0.4)
+        for k in range(8):
+            m = ch[k % 3] + (12 if k % 4 == 3 else 0) + 12
+            note(hz(m), t0 + k * beat / 2, beat * 0.9, 0.09, "pluck")
+        for k in range(2):
+            m = melody[(bar % 8) * 4 + k * 2] if bar >= 4 else None
+            if m:
+                note(hz(m), t0 + k * 2 * beat, beat * 1.8, 0.07, "tri", attack=0.05, release=0.5)
+    # Soft room echo
+    d = int(sr * beat * 0.75)
+    echo = np.zeros_like(out)
+    echo[d:] = out[:-d] * 0.25
+    out = out + echo
+    out = out / max(1e-6, np.max(np.abs(out))) * 0.8
+    # Seamless loop: fade the echo tail into the start
+    tail = int(sr * 0.05)
+    out[:tail] *= np.linspace(0, 1, tail)
+    out[-tail:] *= np.linspace(1, 0, tail)
+    write("music_shop.wav", out)
+
+
 if __name__ == "__main__":
+    music()
     main()

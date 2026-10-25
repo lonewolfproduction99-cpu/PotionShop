@@ -282,6 +282,41 @@ class Model:
         if bottom:
             self._disc(node, cx, cy, z, r, segments, cap, tint, up=False, unlit=unlit)
 
+    def lathe(self, cx, cy, profile, tile, segments=16, node="root", tint=(1, 1, 1), inward=False, unlit=False):
+        """Surface of revolution around a vertical axis. profile: [(z, r), ...] from bottom to top."""
+        cx, cy = cx + self.offset[0], cy + self.offset[1]
+        zo = self.offset[2]
+        for k in range(len(profile) - 1):
+            (z0, r0), (z1, r1) = profile[k], profile[k + 1]
+            for i in range(segments):
+                a0 = 2 * math.pi * i / segments
+                a1 = 2 * math.pi * (i + 1) / segments
+                am = (a0 + a1) / 2
+                slope = math.atan2(r0 - r1, z1 - z0)  # tilt of the face normal
+                n = (math.cos(am) * math.cos(slope), math.sin(am) * math.cos(slope), math.sin(slope))
+                if inward:
+                    n = (-n[0], -n[1], -n[2])
+                c = [(cx + r1 * math.cos(a1), cy + r1 * math.sin(a1), z1 + zo),
+                     (cx + r1 * math.cos(a0), cy + r1 * math.sin(a0), z1 + zo),
+                     (cx + r0 * math.cos(a0), cy + r0 * math.sin(a0), z0 + zo),
+                     (cx + r0 * math.cos(a1), cy + r0 * math.sin(a1), z0 + zo)]
+                self.quad(node, c, n, tile, tint=tint, uv=[(1, 0), (0, 0), (0, 1), (1, 1)],
+                          shade=[1, 1, 0.9, 0.9], unlit=unlit)
+
+    def ring(self, cx, cy, z, r_in, r_out, tile, segments=16, node="root", tint=(1, 1, 1), unlit=False):
+        """Flat horizontal ring facing up."""
+        cx, cy, z = cx + self.offset[0], cy + self.offset[1], z + self.offset[2]
+        for i in range(segments):
+            a0 = 2 * math.pi * i / segments
+            a1 = 2 * math.pi * (i + 1) / segments
+            c = [(cx + r_in * math.cos(a0), cy + r_in * math.sin(a0), z), (cx + r_in * math.cos(a1), cy + r_in * math.sin(a1), z),
+                 (cx + r_out * math.cos(a1), cy + r_out * math.sin(a1), z), (cx + r_out * math.cos(a0), cy + r_out * math.sin(a0), z)]
+            self.quad(node, c, (0, 0, 1), tile, tint=tint, unlit=unlit)
+
+    def disc(self, cx, cy, z, r, tile, segments=16, node="root", tint=(1, 1, 1), unlit=False):
+        self._disc(node, cx + self.offset[0], cy + self.offset[1], z + self.offset[2], r, segments, tile, tint,
+                   up=True, unlit=unlit)
+
     def _disc(self, node, cx, cy, z, r, segments, tile, tint, up=True, unlit=False):
         for i in range(segments):
             a0 = 2 * math.pi * i / segments

@@ -184,7 +184,7 @@ PS.walk = function (ch, dt) {
     PS.turnToward(ch, dx, dy, dt);
     if (step >= d) ch.path.shift();
   }
-  PS.setAnim(ch, ch.path.length ? 'Walk' : ch.idleAnim || 'Idle');
+  PS.setAnim(ch, ch.path.length ? (ch.carrying ? 'Carry' : 'Walk') : ch.idleAnim || 'Idle');
   return ch.path.length === 0;
 };
 

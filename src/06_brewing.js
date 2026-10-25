@@ -116,7 +116,7 @@ PS.Brewing = {
     c.t = 0;
     c.dur = (c.recipe.brewTime * G.mult('quick_brew', -1)) / (c.speed || 1);
     c.liquid.hide(false);
-    c.liquid.setColor(c.recipe.color);
+    PS.tint(c.liquid, c.recipe.color);
     c.liquid.setZ(PS.K.liquidZ);
     if (c.discovered && !G.state.discovered.includes(c.recipe.id)) {
       G.state.discovered.push(c.recipe.id);
@@ -146,7 +146,7 @@ PS.Brewing = {
     const color = c.recipe.color;
     c.recipe = null;
     c.ingredients = [];
-    c.liquid.setColor('70;80;60');
+    PS.tint(c.liquid, '70;80;60');
     c.spill = PS.create(G.scene, 'Spill', c.x - 46, c.y + 26, '');
     c.spill.setZ(0.4);
     c.spill.setColor(color);
@@ -189,7 +189,7 @@ PS.Brewing = {
             unstable && Math.random() < 0.6 ? '60;60;70' : c.recipe.color, U.rand(30, unstable ? 110 : 60),
             U.rand(0.7, 1.2), U.rand(4, unstable ? 12 : 8));
         }
-        if (unstable) c.liquid.setColor(Math.sin(G.time * 18) > 0 ? c.recipe.color : '80;80;90');
+        if (unstable) PS.tint(c.liquid, Math.sin(G.time * 18) > 0 ? c.recipe.color : '80;80;90');
         if (c.t >= c.dur) {
           if (c.accident) {
             this.explode(G, c);

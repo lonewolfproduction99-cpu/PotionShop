@@ -41,8 +41,9 @@ def build_resources():
         res.append({"file": "assets/fonts/" + n, "kind": "font", "metadata": "", "name": n, "userAdded": True})
     for f in sorted(glob.glob(os.path.join(ASSETS, "sfx", "*.wav"))):
         n = os.path.basename(f)
-        res.append({"file": "assets/sfx/" + n, "kind": "audio", "metadata": "", "name": n, "preloadAsMusic": False,
-                    "preloadAsSound": True, "preloadInCache": False, "userAdded": True})
+        music = n.startswith("music_")
+        res.append({"file": "assets/sfx/" + n, "kind": "audio", "metadata": "", "name": n, "preloadAsMusic": music,
+                    "preloadAsSound": not music, "preloadInCache": False, "userAdded": True})
     return res
 
 
@@ -164,7 +165,7 @@ def text_object(name, font, size=28):
     }
 
 
-CHAR_ANIMS = ["Idle", "Walk", "Work", "Sit", "Cheer", "Angry"]
+CHAR_ANIMS = ["Idle", "Walk", "Work", "Sit", "Cheer", "Angry", "Carry"]
 CHAR_SCALE = 1.0
 CUSTOMER_OBJECTS = {
     "knight": "CustKnight", "elf": "CustElf", "farmer": "CustFarmer", "dwarf": "CustDwarf",
@@ -193,7 +194,8 @@ def build_objects(manifest):
     for w in WORKERS:
         objs.append(model_object(w["Object"], "char_" + w["Id"], manifest, CHAR_ANIMS, scale=CHAR_SCALE))
     # Brewing effects
-    objs.append(cube_object("Liquid", "liquid.png", (62, 62, 4)))
+    objs.append(model_object("Liquid", "liquid", manifest, shadows=False, receive=False))
+    objs.append(model_object("HeldBottle", "held_bottle", manifest, shadows=False))
     objs.append(cube_object("Bubble", "white.png", (6, 6, 6)))
     objs.append(cube_object("Spill", "liquid.png", (92, 54, 2)))
     # Navigation helpers (hidden "Nav" layer)

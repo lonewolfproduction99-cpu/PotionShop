@@ -110,7 +110,7 @@ PS.World = {
       c.unlocked = i < nc;
       c.obj.hide(!c.unlocked);
       if (c.unlocked && !c.liquid) {
-        c.liquid = PS.create(scene, 'Liquid', c.x - PS.K.liquidHalf, c.y - PS.K.liquidHalf, '');
+        c.liquid = PS.create(scene, 'Liquid', c.x, c.y, '');
         c.liquid.setZ(PS.K.liquidZ);
         c.liquid.hide(true);
       }
@@ -151,7 +151,9 @@ PS.World = {
       return;
     }
     const base = Math.max(b.spawnIntervalMin, b.spawnIntervalStart - (G.state.level - 1) * 0.8);
-    G.spawnTimer = base * U.rand(0.75, 1.25);
+    // Happy customers spread the word: a busier shop when satisfaction is high.
+    const word = 1.25 - 0.5 * (G.state.satisfaction / 100);
+    G.spawnTimer = base * word * U.rand(0.75, 1.25);
     this.spawnCustomer(G);
   },
 
@@ -366,6 +368,7 @@ PS.World = {
 // Small visual effects: rising bubbles and sparkles made of tiny 3D cubes.
 PS.FX = {
   bubble(G, x, y, z, color, rise, life, size) {
+    if (G.fx.length > 90) return; // keep effects cheap on phones
     const o = PS.create(G.scene, 'Bubble', x - size / 2, y - size / 2, '');
     o.setZ(z);
     o.setWidth(size);

@@ -15,7 +15,7 @@ PS.Save = {
   KEY: 'save',
   VERSION: 2,
   META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes',
-    'discovered', 'accidents'],
+    'discovered', 'accidents', 'tutorialDone', 'lastSeen', 'incomeRate'],
   RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers', 'garden'],
 
   defaults() {
@@ -43,6 +43,9 @@ PS.Save = {
       discovered: [], // recipes whose bonus herb was found
       accidents: 0,
       garden: [], // herb garden plots: { herb, readyAt (ms timestamp) }
+      tutorialDone: false,
+      lastSeen: 0, // time of the last save (ms), for offline earnings
+      incomeRate: 0, // recent gold earned per minute
     };
   },
 
@@ -75,6 +78,9 @@ PS.Save = {
     s.prestige = Math.floor(num(raw.prestige, 0, 0, 999));
     if (Array.isArray(raw.discovered)) s.discovered = raw.discovered.filter((id) => PS.data.recipeById[id]);
     s.accidents = Math.floor(num(raw.accidents, 0, 0, 1e9));
+    s.tutorialDone = raw.tutorialDone === true;
+    s.lastSeen = num(raw.lastSeen, 0, 0, 1e15);
+    s.incomeRate = num(raw.incomeRate, 0, 0, 1e12);
     if (Array.isArray(raw.garden)) {
       s.garden = raw.garden.slice(0, 16).map((p) => ({
         herb: p && PS.data.ingredientById[p.herb] ? p.herb : 'redleaf',

@@ -13,7 +13,13 @@ PS.util = {
   facingAngle: (dx, dy) => (Math.atan2(dy, dx) * 180) / Math.PI - 90,
   // Smallest signed difference between two angles in degrees.
   angleDiff: (a, b) => ((((b - a) % 360) + 540) % 360) - 180,
-  formatGold: (n) => (n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n))),
+  // 950, 12.3k, 4.5M, 1.2B, 3.4T (prices grow very large after prestiges).
+  formatGold: (n) => {
+    if (n < 10000) return String(Math.floor(n));
+    const units = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']];
+    for (const [v, u] of units) if (n >= v) return (n / v).toFixed(n / v >= 100 ? 0 : 1) + u;
+    return String(Math.floor(n));
+  },
   formatTime: (s) => (s >= 60 ? Math.floor(s / 60) + 'm ' + Math.floor(s % 60) + 's' : Math.ceil(s) + 's'),
 };
 
@@ -23,10 +29,10 @@ PS.K = {
   tableStandX: 56, // where a worker stands beside a table (towards the aisle)
   tableStandY: -35,
   cauldronStandY: 78, // where a worker stands in front of a cauldron
-  liquidHalf: 31, // half size of the liquid surface inside a cauldron
-  liquidZ: 58,
-  liquidRise: 6,
-  potTop: 68,
+  liquidZ: 56, // liquid surface height inside a cauldron
+  liquidRise: 9,
+  potTop: 73,
+  handZ: 33, // height of a carried potion
   counterStandX: 40, // behind the counter
   counterStandY: -50,
   sitZ: -1.4, // character height offset when sitting on a chair
@@ -35,6 +41,26 @@ PS.K = {
   ringCauldron: 136,
   ringWorker: 124,
   carryZ: 114,
+};
+
+// Tint the unlit parts of a 3D model (liquids) without affecting other
+// instances of the same model.
+PS.tint = function (obj, rgb) {
+  const [r, g, b] = rgb.split(';').map((v) => Number(v) / 255);
+  obj.get3DRendererObject().traverse((node) => {
+    if (!node.isMesh) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    mats.forEach((m, i) => {
+      if (m.name !== 'unlit') return;
+      if (!m.userData.psOwn) {
+        m = m.clone();
+        m.userData.psOwn = true;
+        if (Array.isArray(node.material)) node.material[i] = m;
+        else node.material = m;
+      }
+      m.color.setRGB(r, g, b);
+    });
+  });
 };
 
 PS.create = function (runtimeScene, name, x, y, layer) {
