@@ -1,0 +1,12 @@
+{
+  "name": "Potion Shop",
+  "short_name": "Potion Shop",
+  "id": "com.lonewolfproduction.potionshop",
+  "description": "A cozy 3D potion shop management game: brew potions, serve customers, grow your shop.",
+  "orientation": "portrait",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "black",
+  "categories": ["games", "entertainment"],
+  "icons": []
+}
