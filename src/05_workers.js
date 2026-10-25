@@ -16,6 +16,7 @@ PS.TASKS = {
   deliver: { icon: 'icon_check', color: '110;220;120', label: 'Deliver' },
   fetchStock: { icon: 'icon_sparkle', color: '255;205;80', label: 'Fetch potion' },
   store: { icon: 'icon_check', color: '255;205;80', label: 'Store potion' },
+  clean: { icon: 'icon_broom', color: '90;220;200', label: 'Clean spill' },
 };
 
 PS.Workers = {
@@ -97,6 +98,7 @@ PS.Workers = {
     if (brew) {
       for (const c of G.cauldrons) {
         if (c.unlocked && c.state === 'done' && free('collect', c)) options.push({ p: 0, dist: d(c.x, c.y), task: { type: 'collect', target: c } });
+        if (c.unlocked && c.state === 'dirty' && free('clean', c)) options.push({ p: 0.5, dist: d(c.x, c.y), task: { type: 'clean', target: c } });
       }
     }
     if (service) {
@@ -120,7 +122,7 @@ PS.Workers = {
     options.sort((a, b) => a.p - b.p || a.dist - b.dist);
     const best = options[0];
     if (best.job) {
-      if (!PS.Brewing.reserve(G, best.job.cauldron, best.job.recipe.ingredients)) return;
+      if (!PS.Brewing.reserve(G, best.job.cauldron, PS.Brewing.bestIngredients(G, best.job.recipe))) return;
       this.begin(G, w, { type: 'startBrew', target: best.job.cauldron });
     } else {
       this.begin(G, w, best.task);
@@ -206,6 +208,7 @@ PS.Workers = {
         return { x: t.seat.standX, y: t.seat.standY, fx: t.seat.x - t.seat.standX, fy: t.seat.y - t.seat.standY };
       case 'startBrew':
       case 'collect':
+      case 'clean':
         return { x: t.standX, y: t.standY, fx: 0, fy: -1 };
       case 'fetchStock':
       case 'store':
@@ -226,6 +229,8 @@ PS.Workers = {
         return t.state === 'reserved';
       case 'collect':
         return t.state === 'done';
+      case 'clean':
+        return t.state === 'dirty';
       case 'fetchStock':
         return t.state === 'ordered' && (G.state.stock[t.recipe.id] || 0) > 0;
       case 'store':
@@ -243,6 +248,7 @@ PS.Workers = {
       deliver: b.deliverTime,
       fetchStock: b.collectTime,
       store: b.collectTime * 0.6,
+      clean: b.cleanTime,
     }[type];
     const stat = type === 'takeOrder' || type === 'deliver' ? 'service' : 'brew';
     const apprentice = w && !w.isOwner ? PS.data.balance.apprenticeSlowness : 1;
@@ -377,13 +383,17 @@ PS.Workers = {
       case 'startBrew':
         PS.Brewing.start(G, t);
         break;
+      case 'clean':
+        PS.Brewing.clean(G, t);
+        break;
       case 'collect':
+        w.carryQuality = t.quality;
         w.carrying = PS.Brewing.collect(G, t);
         if (w.carrying) this.assignDelivery(G, w);
         break;
       case 'fetchStock':
         if ((G.state.stock[t.recipe.id] || 0) > 0) {
-          G.state.stock[t.recipe.id]--;
+          w.carryQuality = PS.Stock.take(G, t.recipe.id);
           w.carrying = t.recipe;
           this.begin(G, w, { type: 'deliver', target: t, recipe: t.recipe });
           t.deliveryReserved = true;
@@ -392,7 +402,7 @@ PS.Workers = {
         break;
       case 'deliver':
         if (w.carrying && t.state === 'ordered') {
-          PS.World.serve(G, t, w.carrying);
+          PS.World.serve(G, t, w.carrying, w.carryQuality);
           w.carrying = null;
         } else {
           this.retargetDelivery(G, w, task);
@@ -446,7 +456,7 @@ PS.Workers = {
       G.addGold(Math.round(r.price * 0.5));
       return;
     }
-    s[r.id] = (s[r.id] || 0) + 1;
+    PS.Stock.add(G, r, w.carryQuality === undefined ? 1 : w.carryQuality);
     PS.UI.toast(G, r.name + ' stored on the counter');
     PS.UI.markDirty(G);
   },

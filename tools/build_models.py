@@ -31,7 +31,7 @@ def main(only=None):
         model = fn()
         # Furniture and characters are authored small and scaled up together;
         # the room shell and the exterior are authored at their final size.
-        scale = 1.0 if name in ("room", "exterior") else PROP_SCALE
+        scale = 1.0 if name in ("room", "exterior", "garden") else PROP_SCALE
         info = model.save(os.path.join(OUT, name + ".glb"), scale)
         manifest[name] = info
         print(name, info["min"], info["max"])

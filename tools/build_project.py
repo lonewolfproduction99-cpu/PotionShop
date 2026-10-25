@@ -195,6 +195,7 @@ def build_objects(manifest):
     # Brewing effects
     objs.append(cube_object("Liquid", "liquid.png", (62, 62, 4)))
     objs.append(cube_object("Bubble", "white.png", (6, 6, 6)))
+    objs.append(cube_object("Spill", "liquid.png", (92, 54, 2)))
     # Navigation helpers (hidden "Nav" layer)
     objs.append(sprite_object("NavBlock", [("", ["navblock.png"])]))
     objs.append(sprite_object("Waypoint", [("", ["navblock.png"])], variables=[var("Kind", ""), var("Order", 0)]))
@@ -214,7 +215,20 @@ def build_objects(manifest):
     objs.append(panel_object("BarBack", "bar_back.png", (64, 20), (9, 0, 9, 0)))
     objs.append(panel_object("BarFill", "bar_fill.png", (64, 20), (9, 0, 9, 0)))
     objs.append(text_object("UiText", "LilitaOne-Regular.ttf"))
+    # Herb garden scene
+    objs.append(model_object("Garden", "garden", manifest, shadows=False))
+    objs.append(model_object("Plot", "plot", manifest))
+    for k in PLANTS:
+        objs.append(model_object("Plant" + k.capitalize(), "plant_" + k, manifest))
     return objs
+
+
+PLANTS = ["redleaf", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom", "glowcap"]
+# Objects used by both scenes are project-wide (global) objects.
+GLOBAL_OBJECTS = {"Icon", "RingFill", "RingBack", "SpeechBubble", "Glow", "PanelWood", "PanelParchment", "PanelDark",
+                  "BtnGreen", "BtnGold", "BtnRed", "BtnGray", "BtnBlue", "BtnPurple", "BarBack", "BarFill", "UiText",
+                  "Bubble", "Waypoint", "NavBlock"}
+GARDEN_OBJECTS = {"Garden", "Plot"} | {"Plant" + k.capitalize() for k in PLANTS}
 
 
 NAV_OBSTACLES = ["TableSet", "Cauldron", "Counter", "IngredientShelf", "PotionRack", "Bookshelf", "Barrel",
@@ -308,19 +322,19 @@ def layer(name, rendering="", visible=True, effects=None, fov=35):
 
 # ---------------------------------------------------------------- data
 RECIPES = [
-    dict(Id="healing", Name="Healing Potion", Ingredients=["redleaf", "moonwater"], Price=14, BrewTime=6,
+    dict(Id="healing", Bonus="sunroot", Name="Healing Potion", Ingredients=["redleaf", "moonwater"], Price=14, BrewTime=6,
          Color="235;60;70", Icon="potion_healing", UnlockLevel=1),
-    dict(Id="energy", Name="Energy Potion", Ingredients=["sunroot", "sparkdust"], Price=16, BrewTime=7,
+    dict(Id="energy", Bonus="redleaf", Name="Energy Potion", Ingredients=["sunroot", "sparkdust"], Price=16, BrewTime=7,
          Color="255;176;40", Icon="potion_energy", UnlockLevel=1),
-    dict(Id="mana", Name="Mana Potion", Ingredients=["bluecap", "moonwater"], Price=24, BrewTime=8,
+    dict(Id="mana", Bonus="sparkdust", Name="Mana Potion", Ingredients=["bluecap", "moonwater"], Price=24, BrewTime=8,
          Color="70;130;255", Icon="potion_mana", UnlockLevel=2),
-    dict(Id="strength", Name="Strength Potion", Ingredients=["ironroot", "redleaf"], Price=30, BrewTime=9,
+    dict(Id="strength", Bonus="bluecap", Name="Strength Potion", Ingredients=["ironroot", "redleaf"], Price=30, BrewTime=9,
          Color="190;100;45", Icon="potion_strength", UnlockLevel=3),
-    dict(Id="speed", Name="Speed Potion", Ingredients=["swiftmint", "sparkdust"], Price=36, BrewTime=9,
+    dict(Id="speed", Bonus="moonwater", Name="Speed Potion", Ingredients=["swiftmint", "sparkdust"], Price=36, BrewTime=9,
          Color="60;225;140", Icon="potion_speed", UnlockLevel=4),
-    dict(Id="night", Name="Night Vision Potion", Ingredients=["bluecap", "sunroot"], Price=44, BrewTime=10,
+    dict(Id="night", Bonus="swiftmint", Name="Night Vision Potion", Ingredients=["bluecap", "sunroot"], Price=44, BrewTime=10,
          Color="110;70;200", Icon="potion_night", UnlockLevel=5),
-    dict(Id="fire", Name="Fire Shield Potion", Ingredients=["ironroot", "sunroot"], Price=52, BrewTime=11,
+    dict(Id="fire", Bonus="bluecap", Name="Fire Shield Potion", Ingredients=["ironroot", "sunroot"], Price=52, BrewTime=11,
          Color="235;90;40", Icon="potion_fire", UnlockLevel=6),
 ]
 INGREDIENTS = [
@@ -331,6 +345,8 @@ INGREDIENTS = [
     dict(Id="bluecap", Name="Bluecap", Cost=4, Bundle=5, Icon="ing_bluecap", UnlockLevel=2),
     dict(Id="ironroot", Name="Ironroot", Cost=5, Bundle=5, Icon="ing_ironroot", UnlockLevel=3),
     dict(Id="swiftmint", Name="Swiftmint", Cost=6, Bundle=5, Icon="ing_swiftmint", UnlockLevel=4),
+    dict(Id="starbloom", Name="Starbloom", Cost=40, Bundle=1, Icon="ing_starbloom", UnlockLevel=6, Rare=True),
+    dict(Id="glowcap", Name="Glowcap", Cost=30, Bundle=1, Icon="ing_glowcap", UnlockLevel=6, Rare=True),
 ]
 CUSTOMERS = [
     dict(Id="farmer", Object="CustFarmer", Name="Farmer", Patience=80, Tip=0.9, Speed=95, MinLevel=1),
@@ -355,6 +371,10 @@ UPGRADES = [
          Tab="upgrades", BaseCost=100, CostGrowth=1.7, MaxLevel=5, Effect=0.1, MinShopLevel=2),
     dict(Id="herb_storage", Name="Bigger Pantry", Description="Store 10 more of each herb.", Icon="icon_bag",
          Tab="upgrades", BaseCost=60, CostGrowth=1.6, MaxLevel=5, Effect=10, MinShopLevel=2),
+    dict(Id="safety_goggles", Name="Safety Goggles", Description="Fewer brewing accidents.", Icon="icon_goggles",
+         Tab="upgrades", BaseCost=90, CostGrowth=1.7, MaxLevel=4, Effect=0.35, MinShopLevel=3),
+    dict(Id="master_brewer", Name="Master Brewer", Description="Chance to brew one quality level higher.",
+         Icon="icon_quality", Tab="upgrades", BaseCost=150, CostGrowth=1.75, MaxLevel=5, Effect=0.08, MinShopLevel=4),
     dict(Id="extra_table", Name="Extra Table", Description="Seat one more customer.", Icon="icon_tables",
          Tab="expand", BaseCost=60, CostGrowth=1.8, MaxLevel=3, Effect=1, MinShopLevel=1),
     dict(Id="extra_cauldron", Name="Extra Cauldron", Description="Brew more potions at the same time.",
@@ -368,7 +388,9 @@ WORKERS = [
 BALANCE = dict(StartGold=40, StartIngredients=6, XpPerServe=10, SpawnIntervalStart=12, SpawnIntervalMin=6,
                QueueSize=3, MaxStock=6, StorageBase=20, OwnerSpeed=150, TakeOrderTime=1.4, AddIngredientsTime=1.2,
                CollectTime=0.8, DeliverTime=0.7, TipMax=0.5, SludgePrice=0,
-               ApprenticeSlowness=1.15, WorkerUpgradeBase=50, WorkerUpgradeGrowth=1.65)
+               ApprenticeSlowness=1.15, WorkerUpgradeBase=50, WorkerUpgradeGrowth=1.65,
+               AccidentWrongExtra=0.55, AccidentSludge=0.4, CleanTime=3, GardenRegrow=45, GardenRareChance=0.08,
+               GardenLevel=2)
 
 
 # ---------------------------------------------------------------- events
@@ -380,6 +402,29 @@ def comment(text):
 def js_event(code):
     return {"type": "BuiltinCommonInstructions::JsCode", "inlineCode": code, "parameterObjects": "",
             "useStrict": True, "eventsSheetExpanded": False}
+
+
+def build_garden_events():
+    module = open(os.path.join(ROOT, "src", "garden", "00_garden.js"), encoding="utf-8").read()
+    init_code = (
+        "// The garden needs the shop systems: start from the shop if they are missing.\n"
+        "const PS = gdjs.PotionShop;\n"
+        "if (!PS || !PS.game) {\n"
+        "  runtimeScene.requestChange(gdjs.SceneChangeRequest.REPLACE_SCENE, 'Shop');\n"
+        "} else {\n"
+        "  runtimeScene.__garden = new PS.Garden(runtimeScene);\n"
+        "}\n"
+    )
+    guarded = "if (gdjs.PotionShop && gdjs.PotionShop.util) {\n" + module + "\n}\n"
+    return [
+        comment("HERB GARDEN — an optional scene pushed on top of the paused shop (Herb shop > Visit the Herb Garden).\n"
+                "Plots are the Plot instances (Order variable); the well is the Waypoint with Kind = well."),
+        {"type": "BuiltinCommonInstructions::Standard",
+         "conditions": [{"type": {"value": "SceneJustBegins"}, "parameters": [""]}],
+         "actions": [],
+         "events": [js_event(guarded), js_event(init_code)]},
+        js_event("const garden = runtimeScene.__garden;\nif (garden) garden.update();\n"),
+    ]
 
 
 def build_events():
@@ -416,9 +461,50 @@ def build_events():
 
 
 # ---------------------------------------------------------------- project
+def scene_layout(name, objects, instances, events, groups):
+    return {
+        "b": 46, "v": 38, "r": 30,
+        "disableInputWhenNotFocused": True, "mangledName": name, "name": name,
+        "standardSortMethod": True, "stopSoundsOnStartup": False, "title": "",
+        "uiSettings": {"grid": False, "gridType": "rectangular", "gridWidth": 16, "gridHeight": 16,
+                       "gridDepth": 16, "gridOffsetX": 0, "gridOffsetY": 0, "gridOffsetZ": 0,
+                       "gridColor": 10401023, "gridAlpha": 0.8, "snap": False, "zoomFactor": 0.6,
+                       "windowMask": False, "selectedLayer": "", "gameEditorMode": "instances-editor"},
+        "objectsGroups": groups,
+        "variables": [],
+        "instances": instances,
+        "objects": objects,
+        "objectsFolderStructure": {"folderName": "__ROOT", "children": [{"objectName": o["name"]} for o in objects]},
+        "events": events,
+        "layers": [
+            layer("", "", True, light_effects()),
+            layer("Overlay", "2d"),
+            layer("UI", "2d"),
+            layer("Nav", "2d", visible=False),
+        ],
+        "behaviorsSharedData": [],
+    }
+
+
+def build_garden_instances():
+    I = [inst("Garden", 0, 0, key="garden-ground")]
+    k = 0
+    for y in (420, 580, 740):
+        for x in (165, 320, 475):
+            k += 1
+            I.append(inst("Plot", x, y, variables=[var("Order", k)], key="plot-%d" % k))
+    I.append(inst("Waypoint", 316, 136, layer="Nav", size=(8, 8), variables=[var("Kind", "well"), var("Order", 0)],
+                  key="wp-well"))
+    return I
+
+
 def build():
     manifest = json.load(open(os.path.join(ASSETS, "models", "manifest.json")))
-    objects = build_objects(manifest)
+    all_objects = build_objects(manifest)
+    global_objects = [o for o in all_objects if o["name"] in GLOBAL_OBJECTS]
+    garden_objects = [o for o in all_objects if o["name"] in GARDEN_OBJECTS]
+    objects = [o for o in all_objects if o["name"] not in GLOBAL_OBJECTS and o["name"] not in GARDEN_OBJECTS]
+    garden = scene_layout("Garden", garden_objects, build_garden_instances(), build_garden_events(), [])
     scene = {
         "b": 46, "v": 38, "r": 30,
         "disableInputWhenNotFocused": True, "mangledName": "Shop", "name": "Shop",
@@ -466,12 +552,12 @@ def build():
             "currentPlatform": "GDevelop JS platform",
         },
         "resources": {"resources": build_resources()},
-        "objects": [],
-        "objectsFolderStructure": {"folderName": "__ROOT"},
+        "objects": global_objects,
+        "objectsFolderStructure": {"folderName": "__ROOT", "children": [{"objectName": o["name"]} for o in global_objects]},
         "objectsGroups": [],
         "variables": [var("Recipes", RECIPES), var("Ingredients", INGREDIENTS), var("CustomerTypes", CUSTOMERS),
                       var("Upgrades", UPGRADES), var("WorkerTypes", WORKERS), var("Balance", BALANCE)],
-        "layouts": [scene],
+        "layouts": [scene, garden],
         "externalEvents": [],
         "tests": [],
         "eventsFunctionsExtensions": [],
@@ -480,7 +566,7 @@ def build():
     out = os.path.join(GAME, "PotionShop.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(project, f, indent=1, ensure_ascii=False)
-    print("Wrote", out, "objects:", len(objects), "resources:", len(project["resources"]["resources"]))
+    print("Wrote", out, "objects:", len(all_objects), "resources:", len(project["resources"]["resources"]))
 
 
 if __name__ == "__main__":

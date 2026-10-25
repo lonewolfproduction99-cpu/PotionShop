@@ -16,7 +16,7 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, page }) => {
     await sleep(1200);
   };
   await evalG(() => localStorage.clear());
-  await evalG(() => { const G = gdjs.PotionShop.game; G.state.gold = 3000; G.state.level = 5; G.state.inventory.bluecap = 10; });
+  await evalG(() => { const G = gdjs.PotionShop.game; G.state.gold = 3000; G.state.level = 5; for (const id in G.state.inventory) G.state.inventory[id] = 15; });
 
   // Hire two apprentices through the panel.
   await tapHit('tab:workers', 'hud');

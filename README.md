@@ -47,6 +47,25 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 - **Training:** each apprentice has Speed, Brewing and Service upgrades (5 levels each), with costs that rise per level and per apprentice.
 - **Save format version 2:** progress is split into `meta`, which is kept forever (shop level, XP, stats, prestige, gems), and `run`, which resets on a future prestige (gold, herbs, upgrades, potions, workers). Version 1 saves migrate automatically.
 
+## Advanced crafting (Milestone 4)
+
+- **Extra herb (optional third slot):** each recipe has a secret bonus herb.
+  - Use it to brew **Fine** quality. The first time, it's recorded as a discovery and shown in the recipe book.
+  - Any other extra herb makes **Poor** quality and may cause an accident.
+- **Quality** changes the price (Poor ×0.6, Standard ×1, Fine ×1.4, Superb ×2), tips and satisfaction. Finished potions show their quality as stars.
+- **Accidents:** a risky brew bubbles over with dark foam, then explodes into smoke and a glowing spill.
+  - The cauldron can't be used until someone cleans it: tap it, or let an apprentice handle it.
+  - Cleaning shows a circular broom-icon ring. Nothing is ever destroyed.
+- **Rare herbs:**
+  - **Starbloom** makes Superb quality.
+  - **Glowcap** makes Fine quality, brews twice as fast and never explodes.
+  - Both are found in the garden, and sold in the Herb shop from level 6.
+- **Upgrades:** Safety Goggles (fewer accidents) and Master Brewer (a chance of one quality level higher).
+- **Herb Garden** (Herb shop → *Visit the Herb Garden*, from shop level 2): a separate `Garden` scene shown on top of the paused shop.
+  - Tap a ripe plant to gather it, with a circular progress ring.
+  - Plots regrow in 45 seconds of real time, and rare herbs glow. The well gives Moonwater.
+  - Herbs go into the shop's pantry.
+
 ## Project structure
 
 | Path | What it is |
@@ -55,7 +74,8 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 | `game/assets/models/*.glb` | Blocky 3D models: shop, furniture, cauldron, 8 characters with Idle/Walk/Work/Sit/Cheer/Angry animations |
 | `game/assets/ui/*.png` | Icons, panels, buttons and the 48-frame circular progress ring |
 | `game/assets/sfx/*.wav` | Sound effects |
-| `src/*.js` | Game systems. Each file is one JavaScript event in the scene's events sheet |
+| `src/*.js` | Game systems. Each file is one JavaScript event in the `Shop` scene's events sheet |
+| `src/garden/*.js` | The herb garden, the JavaScript event of the `Garden` scene |
 | `tools/` | Asset generators, project builder, export script and Playwright play-tests |
 | `docs/` | Exported HTML5 build (GitHub Pages) |
 
@@ -74,7 +94,7 @@ python3 tools/build_ui.py        # UI images   -> game/assets/ui
 python3 tools/build_sfx.py       # sounds      -> game/assets/sfx
 python3 tools/build_project.py   # GDevelop project (embeds src/*.js as events)
 tools/export.sh <GDevelop portable app dir> docs   # HTML5 export with the official GDevelop CLI
-node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, bot, showcase)
+node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, bot, showcase)
 ```
 
 Note: `build_project.py` regenerates `game/PotionShop.json`. If you edit the project in GDevelop, keep working in GDevelop or port your changes back to the tools.

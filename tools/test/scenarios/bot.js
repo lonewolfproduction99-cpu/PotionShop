@@ -19,7 +19,7 @@ module.exports = async ({ sleep, evalG, shot }) => {
         if (!k.unlocked || k.state !== 'idle') continue;
         const orders = PS.World.pendingOrders(G).concat(G.customers.filter((c) => c.state === 'waitingOrder'));
         const want = orders.find((o) => PS.Brewing.plannedFor(G, o.recipe.id) < orders.filter((x) => x.recipe.id === o.recipe.id).length && PS.Brewing.canBrew(G, o.recipe));
-        if (want) PS.Brewing.request(G, k, want.recipe.ingredients.slice());
+        if (want) PS.Brewing.request(G, k, PS.Brewing.bestIngredients(G, want.recipe));
       }
       // Restock herbs used by known recipes.
       const needed = new Set(PS.Brewing.knownRecipes(G).flatMap((r) => r.ingredients));

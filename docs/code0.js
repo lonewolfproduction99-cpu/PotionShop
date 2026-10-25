@@ -51,6 +51,8 @@ gdjs.ShopCode.GDApprenticeBrambleObjects1= [];
 gdjs.ShopCode.GDApprenticeBrambleObjects2= [];
 gdjs.ShopCode.GDLiquidObjects1= [];
 gdjs.ShopCode.GDLiquidObjects2= [];
+gdjs.ShopCode.GDSpillObjects1= [];
+gdjs.ShopCode.GDSpillObjects2= [];
 gdjs.ShopCode.GDBubbleObjects1= [];
 gdjs.ShopCode.GDBubbleObjects2= [];
 gdjs.ShopCode.GDNavBlockObjects1= [];
@@ -93,7 +95,7 @@ gdjs.ShopCode.GDUiTextObjects1= [];
 gdjs.ShopCode.GDUiTextObjects2= [];
 
 
-gdjs.ShopCode.userFunc0x977090 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e208 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game data =====
 // Recipes, ingredients, customer types and upgrades are stored in the
@@ -115,6 +117,7 @@ PS.loadData = function (runtimeScene) {
     color: String(r.Color || '200;200;200'),
     icon: String(r.Icon || 'potion_sludge'),
     unlockLevel: Number(r.UnlockLevel) || 1,
+    bonus: r.Bonus ? String(r.Bonus) : null, // extra herb that makes it Fine quality
   }));
   const ingredients = (read('Ingredients') || []).map((i) => ({
     id: String(i.Id),
@@ -123,6 +126,7 @@ PS.loadData = function (runtimeScene) {
     bundle: Number(i.Bundle) || 5,
     icon: String(i.Icon || 'ing_redleaf'),
     unlockLevel: Number(i.UnlockLevel) || 1,
+    rare: !!i.Rare,
   }));
   const customers = (read('CustomerTypes') || []).map((c) => ({
     id: String(c.Id),
@@ -173,6 +177,12 @@ PS.loadData = function (runtimeScene) {
     apprenticeSlowness: Number(b.ApprenticeSlowness) || 1.15, // apprentices start a bit slower than the owner
     workerUpgradeBase: Number(b.WorkerUpgradeBase) || 50,
     workerUpgradeGrowth: Number(b.WorkerUpgradeGrowth) || 1.65,
+    accidentWrongExtra: Number(b.AccidentWrongExtra) || 0.55, // chance a wrong extra herb explodes
+    accidentSludge: Number(b.AccidentSludge) || 0.4,
+    cleanTime: Number(b.CleanTime) || 3,
+    gardenRegrow: Number(b.GardenRegrow) || 45, // seconds for a garden plot to regrow
+    gardenRareChance: Number(b.GardenRareChance) || 0.08,
+    gardenLevel: Number(b.GardenLevel) || 2,
   };
 
   PS.data = {
@@ -204,7 +214,7 @@ PS.xpForLevel = function (level) {
 };
 
 };
-gdjs.ShopCode.userFunc0x8e7d38 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e2f8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: utilities =====
 // Math helpers, object helpers and the 3D -> screen projection used to place
@@ -317,7 +327,7 @@ PS.setupCamera = function (runtimeScene) {
 };
 
 };
-gdjs.ShopCode.userFunc0x8e7dc8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e3c0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: navigation =====
 // Characters walk on a grid built once at scene start. Blocked cells come from
@@ -533,7 +543,7 @@ PS.goTo = function (ch, x, y) {
 };
 
 };
-gdjs.ShopCode.userFunc0x8e7e90 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e488 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
@@ -551,8 +561,9 @@ PS.Save = {
   STORAGE: 'PotionShop',
   KEY: 'save',
   VERSION: 2,
-  META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes'],
-  RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers'],
+  META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes',
+    'discovered', 'accidents'],
+  RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers', 'garden'],
 
   defaults() {
     const d = PS.data;
@@ -576,6 +587,9 @@ PS.Save = {
       prestige: 0,
       gems: 0,
       workers: [], // hired apprentices: { type, role, stats: { speed, brew, service } }
+      discovered: [], // recipes whose bonus herb was found
+      accidents: 0,
+      garden: [], // herb garden plots: { herb, readyAt (ms timestamp) }
     };
   },
 
@@ -606,6 +620,14 @@ PS.Save = {
     }
     if (Array.isArray(raw.seenRecipes)) s.seenRecipes = raw.seenRecipes.filter((id) => PS.data.recipeById[id]);
     s.prestige = Math.floor(num(raw.prestige, 0, 0, 999));
+    if (Array.isArray(raw.discovered)) s.discovered = raw.discovered.filter((id) => PS.data.recipeById[id]);
+    s.accidents = Math.floor(num(raw.accidents, 0, 0, 1e9));
+    if (Array.isArray(raw.garden)) {
+      s.garden = raw.garden.slice(0, 16).map((p) => ({
+        herb: p && PS.data.ingredientById[p.herb] ? p.herb : 'redleaf',
+        readyAt: num(p && p.readyAt, 0, 0, 1e15),
+      }));
+    }
     s.gems = Math.floor(num(raw.gems, 0, 0, 1e9));
     if (Array.isArray(raw.workers)) {
       const types = PS.data.workerTypes;
@@ -684,7 +706,7 @@ PS.Save = {
 };
 
 };
-gdjs.ShopCode.userFunc0x8e7fb0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e5a8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: shop world =====
 // Builds the shop from the scene instances (tables, cauldrons, waypoints),
@@ -932,16 +954,17 @@ PS.World = {
   },
 
   // Called when a potion is handed over.
-  serve(G, c, recipe) {
+  serve(G, c, recipe, quality) {
+    const q = PS.QUALITY[quality === undefined ? 1 : quality];
     const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
     const tip = 1 + PS.data.balance.tipMax * ratio;
-    const price = Math.round(recipe.price * G.mult('fine_bottles', +1) * tip * c.type.tip);
+    const price = Math.round(recipe.price * q.price * G.mult('fine_bottles', +1) * tip * c.type.tip);
     G.addGold(price);
     G.state.served += 1;
     G.state.earned += price;
     G.addXp(PS.data.balance.xpPerServe + Math.round(5 * ratio));
-    G.recordSatisfaction(50 + 50 * ratio);
-    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, '+' + price, 'icon_coin');
+    G.recordSatisfaction(U.clamp(50 + 50 * ratio + q.mood, 0, 100));
+    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, '+' + price + (quality !== 1 ? '  ' + q.name + '!' : ''), 'icon_coin');
     c.state = 'served';
     c.timer = 1.3;
     c.obj.setZ(0);
@@ -1089,7 +1112,7 @@ PS.FX = {
 };
 
 };
-gdjs.ShopCode.userFunc0x98dab8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e680 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: workers and task queue =====
 // Every worker performs one physical task at a time.
@@ -1109,6 +1132,7 @@ PS.TASKS = {
   deliver: { icon: 'icon_check', color: '110;220;120', label: 'Deliver' },
   fetchStock: { icon: 'icon_sparkle', color: '255;205;80', label: 'Fetch potion' },
   store: { icon: 'icon_check', color: '255;205;80', label: 'Store potion' },
+  clean: { icon: 'icon_broom', color: '90;220;200', label: 'Clean spill' },
 };
 
 PS.Workers = {
@@ -1190,6 +1214,7 @@ PS.Workers = {
     if (brew) {
       for (const c of G.cauldrons) {
         if (c.unlocked && c.state === 'done' && free('collect', c)) options.push({ p: 0, dist: d(c.x, c.y), task: { type: 'collect', target: c } });
+        if (c.unlocked && c.state === 'dirty' && free('clean', c)) options.push({ p: 0.5, dist: d(c.x, c.y), task: { type: 'clean', target: c } });
       }
     }
     if (service) {
@@ -1213,7 +1238,7 @@ PS.Workers = {
     options.sort((a, b) => a.p - b.p || a.dist - b.dist);
     const best = options[0];
     if (best.job) {
-      if (!PS.Brewing.reserve(G, best.job.cauldron, best.job.recipe.ingredients)) return;
+      if (!PS.Brewing.reserve(G, best.job.cauldron, PS.Brewing.bestIngredients(G, best.job.recipe))) return;
       this.begin(G, w, { type: 'startBrew', target: best.job.cauldron });
     } else {
       this.begin(G, w, best.task);
@@ -1299,6 +1324,7 @@ PS.Workers = {
         return { x: t.seat.standX, y: t.seat.standY, fx: t.seat.x - t.seat.standX, fy: t.seat.y - t.seat.standY };
       case 'startBrew':
       case 'collect':
+      case 'clean':
         return { x: t.standX, y: t.standY, fx: 0, fy: -1 };
       case 'fetchStock':
       case 'store':
@@ -1319,6 +1345,8 @@ PS.Workers = {
         return t.state === 'reserved';
       case 'collect':
         return t.state === 'done';
+      case 'clean':
+        return t.state === 'dirty';
       case 'fetchStock':
         return t.state === 'ordered' && (G.state.stock[t.recipe.id] || 0) > 0;
       case 'store':
@@ -1336,6 +1364,7 @@ PS.Workers = {
       deliver: b.deliverTime,
       fetchStock: b.collectTime,
       store: b.collectTime * 0.6,
+      clean: b.cleanTime,
     }[type];
     const stat = type === 'takeOrder' || type === 'deliver' ? 'service' : 'brew';
     const apprentice = w && !w.isOwner ? PS.data.balance.apprenticeSlowness : 1;
@@ -1470,13 +1499,17 @@ PS.Workers = {
       case 'startBrew':
         PS.Brewing.start(G, t);
         break;
+      case 'clean':
+        PS.Brewing.clean(G, t);
+        break;
       case 'collect':
+        w.carryQuality = t.quality;
         w.carrying = PS.Brewing.collect(G, t);
         if (w.carrying) this.assignDelivery(G, w);
         break;
       case 'fetchStock':
         if ((G.state.stock[t.recipe.id] || 0) > 0) {
-          G.state.stock[t.recipe.id]--;
+          w.carryQuality = PS.Stock.take(G, t.recipe.id);
           w.carrying = t.recipe;
           this.begin(G, w, { type: 'deliver', target: t, recipe: t.recipe });
           t.deliveryReserved = true;
@@ -1485,7 +1518,7 @@ PS.Workers = {
         break;
       case 'deliver':
         if (w.carrying && t.state === 'ordered') {
-          PS.World.serve(G, t, w.carrying);
+          PS.World.serve(G, t, w.carrying, w.carryQuality);
           w.carrying = null;
         } else {
           this.retargetDelivery(G, w, task);
@@ -1539,18 +1572,26 @@ PS.Workers = {
       G.addGold(Math.round(r.price * 0.5));
       return;
     }
-    s[r.id] = (s[r.id] || 0) + 1;
+    PS.Stock.add(G, r, w.carryQuality === undefined ? 1 : w.carryQuality);
     PS.UI.toast(G, r.name + ' stored on the counter');
     PS.UI.markDirty(G);
   },
 };
 
 };
-gdjs.ShopCode.userFunc0x8e80e8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e758 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: brewing =====
-// Cauldron states: idle -> reserved (ingredients paid, owner on the way)
+// Cauldron states: idle -> reserved (ingredients paid, worker on the way)
 // -> brewing (timer, circular progress) -> done (potion ready to collect).
+// A risky brew can end in an accident instead: the cauldron becomes "dirty"
+// and must be cleaned before it can be used again.
+//
+// A brew uses the recipe's two ingredients plus an optional extra herb:
+//   - the recipe's bonus herb (discovered by trying it): Fine quality,
+//   - Starbloom (rare): Superb quality,
+//   - Glowcap (rare): Fine quality, brews twice as fast and never explodes,
+//   - any other herb: Poor quality and a risk of an accident.
 const PS = gdjs.PotionShop;
 const U = PS.util;
 
@@ -1564,6 +1605,13 @@ PS.SLUDGE = {
   icon: 'potion_sludge',
   unlockLevel: 1,
 };
+
+PS.QUALITY = [
+  { name: 'Poor', price: 0.6, mood: -15, color: '200;90;70' },
+  { name: 'Standard', price: 1, mood: 0, color: '230;230;230' },
+  { name: 'Fine', price: 1.4, mood: 10, color: '120;220;255' },
+  { name: 'Superb', price: 2, mood: 20, color: '255;214;80' },
+];
 
 PS.Brewing = {
   // Player confirmed a brew in the cauldron panel.
@@ -1583,6 +1631,39 @@ PS.Brewing = {
     return true;
   },
 
+  // What a brew will produce: recipe, quality, speed and whether it explodes.
+  // Rolled when the brew is reserved, so the result is fixed from then on.
+  outcome(G, ingredientIds) {
+    const base = ingredientIds.slice(0, 2);
+    const extra = ingredientIds[2] || null;
+    const recipe = PS.findRecipe(base) || PS.SLUDGE;
+    const b = PS.data.balance;
+    let quality = recipe === PS.SLUDGE ? 0 : 1;
+    let risk = recipe === PS.SLUDGE ? b.accidentSludge : 0;
+    let speed = 1;
+    let discovered = false;
+    if (extra && recipe !== PS.SLUDGE) {
+      if (extra === 'starbloom') quality = 3;
+      else if (extra === 'glowcap') {
+        quality = 2;
+        speed = 2;
+      } else if (extra === recipe.bonus) {
+        quality = 2;
+        discovered = true;
+      } else {
+        quality = 0;
+        risk = b.accidentWrongExtra;
+      }
+    }
+    if (extra === 'glowcap') risk = 0;
+    // Master Brewer: a chance to improve Standard and Fine potions.
+    if ((quality === 1 || quality === 2) && Math.random() < G.level('master_brewer') * (PS.data.upgradeById.master_brewer || { effect: 0 }).effect) {
+      quality += 1;
+    }
+    const accident = Math.random() < risk * G.mult('safety_goggles', -1);
+    return { recipe, quality, speed, accident, discovered, extra };
+  },
+
   // Pay the ingredients and hold the cauldron until a worker adds them.
   reserve(G, cauldron, ingredientIds) {
     if (cauldron.state !== 'idle') return false;
@@ -1591,9 +1672,13 @@ PS.Brewing = {
       if ((inv[id] || 0) < ingredientIds.filter((x) => x === id).length) return false;
     }
     for (const id of ingredientIds) inv[id] -= 1;
-    const recipe = PS.findRecipe(ingredientIds);
+    const o = this.outcome(G, ingredientIds);
     cauldron.state = 'reserved';
-    cauldron.recipe = recipe || PS.SLUDGE;
+    cauldron.recipe = o.recipe;
+    cauldron.quality = o.quality;
+    cauldron.speed = o.speed;
+    cauldron.accident = o.accident;
+    cauldron.discovered = o.discovered;
     cauldron.ingredients = ingredientIds.slice();
     G.requestSave();
     PS.UI.markDirty(G);
@@ -1612,10 +1697,16 @@ PS.Brewing = {
     if (c.state !== 'reserved') return;
     c.state = 'brewing';
     c.t = 0;
-    c.dur = c.recipe.brewTime * G.mult('quick_brew', -1);
+    c.dur = (c.recipe.brewTime * G.mult('quick_brew', -1)) / (c.speed || 1);
     c.liquid.hide(false);
     c.liquid.setColor(c.recipe.color);
     c.liquid.setZ(PS.K.liquidZ);
+    if (c.discovered && !G.state.discovered.includes(c.recipe.id)) {
+      G.state.discovered.push(c.recipe.id);
+      const herb = PS.data.ingredientById[c.recipe.bonus];
+      PS.UI.toast(G, 'Discovery! ' + herb.name + ' makes ' + c.recipe.name + ' Fine quality');
+      PS.Audio.play(G, 'levelup');
+    }
     PS.UI.markDirty(G);
   },
 
@@ -1631,20 +1722,62 @@ PS.Brewing = {
     return r;
   },
 
+  // The brew boils over: smoke, a glowing spill, and the cauldron is out of
+  // use until someone cleans it. Nothing is destroyed.
+  explode(G, c) {
+    c.state = 'dirty';
+    const color = c.recipe.color;
+    c.recipe = null;
+    c.ingredients = [];
+    c.liquid.setColor('70;80;60');
+    c.spill = PS.create(G.scene, 'Spill', c.x - 46, c.y + 26, '');
+    c.spill.setZ(0.4);
+    c.spill.setColor(color);
+    G.state.accidents = (G.state.accidents || 0) + 1;
+    for (let i = 0; i < 18; i++) {
+      PS.FX.bubble(G, c.x + U.rand(-40, 40), c.y + U.rand(-40, 40), PS.K.potTop + U.rand(0, 20), '90;90;95',
+        U.rand(40, 110), U.rand(0.8, 1.6), U.rand(8, 16));
+    }
+    PS.FX.sparkleAt(G, c.x, c.y, PS.K.potTop);
+    PS.UI.floatText(G, c.x, c.y, 120, 'Accident! Clean it up', 'icon_skull');
+    PS.Audio.play(G, 'boom');
+    PS.UI.markDirty(G);
+  },
+
+  clean(G, c) {
+    if (c.state !== 'dirty') return;
+    c.state = 'idle';
+    c.liquid.hide(true);
+    PS.destroy(c.spill);
+    c.spill = null;
+    PS.FX.sparkleAt(G, c.x, c.y + 40, 20);
+    PS.Audio.play(G, 'sweep');
+    PS.UI.markDirty(G);
+  },
+
   update(G, dt) {
     for (const c of G.cauldrons) {
       if (!c.unlocked) continue;
       if (c.state === 'brewing') {
         c.t += dt;
+        const k = Math.min(1, c.t / c.dur);
         // Liquid rises slightly while brewing.
-        c.liquid.setZ(PS.K.liquidZ + PS.K.liquidRise * Math.min(1, c.t / c.dur));
+        c.liquid.setZ(PS.K.liquidZ + PS.K.liquidRise * k);
+        const unstable = c.accident && k > 0.55;
         c.bubbleTimer -= dt;
         if (c.bubbleTimer <= 0) {
-          c.bubbleTimer = 0.22;
-          PS.FX.bubble(G, c.x + U.rand(-22, 22), c.y + U.rand(-22, 22), PS.K.potTop - 4, c.recipe.color,
-            U.rand(30, 60), U.rand(0.7, 1.2), U.rand(4, 8));
+          // A brew that is about to go wrong bubbles over with dark foam.
+          c.bubbleTimer = unstable ? 0.07 : 0.22;
+          PS.FX.bubble(G, c.x + U.rand(-22, 22), c.y + U.rand(-22, 22), PS.K.potTop - 4,
+            unstable && Math.random() < 0.6 ? '60;60;70' : c.recipe.color, U.rand(30, unstable ? 110 : 60),
+            U.rand(0.7, 1.2), U.rand(4, unstable ? 12 : 8));
         }
+        if (unstable) c.liquid.setColor(Math.sin(G.time * 18) > 0 ? c.recipe.color : '80;80;90');
         if (c.t >= c.dur) {
+          if (c.accident) {
+            this.explode(G, c);
+            continue;
+          }
           c.state = 'done';
           PS.FX.sparkleAt(G, c.x, c.y, PS.K.potTop);
           PS.Audio.play(G, 'ready');
@@ -1656,6 +1789,13 @@ PS.Brewing = {
           c.bubbleTimer = 0.12;
           PS.FX.bubble(G, c.x + U.rand(-24, 24), c.y + U.rand(-24, 24), PS.K.potTop, '255;245;200',
             U.rand(50, 100), U.rand(0.5, 0.9), U.rand(3, 5));
+        }
+      } else if (c.state === 'dirty') {
+        c.bubbleTimer -= dt;
+        if (c.bubbleTimer <= 0) {
+          c.bubbleTimer = 0.5;
+          PS.FX.bubble(G, c.x + U.rand(-20, 20), c.y + U.rand(-20, 20), PS.K.potTop, '100;100;105', U.rand(20, 40),
+            U.rand(1, 1.6), U.rand(6, 10));
         }
       }
     }
@@ -1677,18 +1817,50 @@ PS.Brewing = {
     return true;
   },
 
+  // Ingredients for a quick brew: the recipe plus its bonus herb when it has
+  // been discovered and one is spare.
+  bestIngredients(G, recipe) {
+    const ids = recipe.ingredients.slice();
+    const bonus = recipe.bonus;
+    if (bonus && G.state.discovered.includes(recipe.id)) {
+      const needed = ids.filter((x) => x === bonus).length + 1;
+      if ((G.state.inventory[bonus] || 0) >= needed) ids.push(bonus);
+    }
+    return ids;
+  },
+
   // Potions already planned for a recipe (brewing, ready, carried, stored).
   plannedFor(G, recipeId) {
     let n = 0;
-    for (const c of G.cauldrons) if (c.recipe && c.recipe.id === recipeId && c.state !== 'idle') n++;
+    for (const c of G.cauldrons) {
+      if (c.recipe && c.recipe.id === recipeId && c.state !== 'idle' && !c.accident) n++;
+    }
     for (const w of G.workers) if (w.carrying && w.carrying.id === recipeId) n++;
     n += G.state.stock[recipeId] || 0;
     return n;
   },
 };
 
+// Potions waiting on the counter keep their quality (not saved: potions in a
+// reloaded game come back as Standard quality).
+PS.Stock = {
+  add(G, recipe, quality) {
+    G.state.stock[recipe.id] = (G.state.stock[recipe.id] || 0) + 1;
+    (G.stockQuality[recipe.id] = G.stockQuality[recipe.id] || []).push(quality);
+  },
+  // Takes the best potion of this kind; returns its quality or -1.
+  take(G, recipeId) {
+    if ((G.state.stock[recipeId] || 0) <= 0) return -1;
+    G.state.stock[recipeId]--;
+    const list = G.stockQuality[recipeId] || [];
+    if (!list.length) return 1;
+    list.sort((a, b) => b - a);
+    return list.shift();
+  },
 };
-gdjs.ShopCode.userFunc0x8e81c0 = function GDJSInlineCode(runtimeScene) {
+
+};
+gdjs.ShopCode.userFunc0x92e830 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: interface =====
 // HUD (top), navigation (bottom), panels (brew, orders, ingredients,
@@ -2002,49 +2174,65 @@ PS.UI = {
     }
   },
 
-  // ----- Brew panel: pick two ingredients (or a recipe) for a cauldron.
+  // ----- Brew panel: two ingredients (or a recipe) plus an optional extra herb.
   buildBrew(G, P) {
     const c = P.params.cauldron;
-    if (!P.params.slots) P.params.slots = [];
-    const slots = P.params.slots;
-    const area = this.frame(G, P, 'Brew a potion', 1000);
+    const given = P.params.slots || [];
+    const slots = (P.params.slots = [given[0] || null, given[1] || null, given[2] || null]);
+    const area = this.frame(G, P, 'Brew a potion', 1040);
     const inv = G.state.inventory;
     const used = {};
-    slots.forEach((id) => (used[id] = (used[id] || 0) + 1));
-    // Slots + result
+    slots.forEach((id) => id && (used[id] = (used[id] || 0) + 1));
     let y = area.y;
     const cx = area.x + area.w / 2;
-    const sz = 104;
-    const xs = [cx - 250, cx - 110];
-    for (let i = 0; i < 2; i++) {
-      this.panelBox(G, 'PanelParchment', xs[i], y, sz, sz, P.items, 16);
+    const sz = 96;
+    const gap = 40;
+    const x0 = cx - (4 * sz + 3 * gap) / 2;
+    const xs = [x0, x0 + sz + gap, x0 + 2 * (sz + gap), x0 + 3 * (sz + gap)];
+    for (let i = 0; i < 3; i++) {
+      const extraSlot = i === 2;
+      this.panelBox(G, extraSlot ? 'PanelDark' : 'PanelParchment', xs[i], y, sz, sz, P.items, 16);
       if (slots[i]) {
-        this.icon(G, PS.data.ingredientById[slots[i]].icon, xs[i] + sz / 2, y + sz / 2, 76, P.items, 'UI', 17);
+        this.icon(G, PS.data.ingredientById[slots[i]].icon, xs[i] + sz / 2, y + sz / 2, 70, P.items, 'UI', 17);
         this.hit(P.hits, xs[i], y, sz, sz, () => {
-          slots.splice(i, 1);
+          slots[i] = null;
           this.rebuild(G);
-        });
+        }, 'slot:' + i);
       } else {
-        this.text(G, '+', xs[i], y + 18, sz, 56, COLORS.muted, 'center', P.items, 'UI', 17);
+        this.text(G, extraSlot ? 'extra\n(optional)' : '+', xs[i], y + (extraSlot ? 26 : 16), sz, extraSlot ? 20 : 56,
+          extraSlot ? '230;220;200' : COLORS.muted, 'center', P.items, 'UI', 17);
       }
     }
-    this.text(G, '+', cx - 146, y + 26, 36, 44, COLORS.ink, 'center', P.items, 'UI', 17);
-    this.text(G, '=', cx + 6, y + 26, 36, 44, COLORS.ink, 'center', P.items, 'UI', 17);
-    const rx = cx + 56;
-    this.panelBox(G, 'PanelParchment', rx, y, sz, sz, P.items, 16);
-    let result = null;
-    // Result name on its own line under the slots.
+    this.text(G, '+', xs[0] + sz, y + 24, gap, 44, COLORS.ink, 'center', P.items, 'UI', 17);
+    this.text(G, '+', xs[1] + sz, y + 24, gap, 44, COLORS.ink, 'center', P.items, 'UI', 17);
+    this.text(G, '=', xs[2] + sz, y + 24, gap, 44, COLORS.ink, 'center', P.items, 'UI', 17);
+    this.panelBox(G, 'PanelParchment', xs[3], y, sz, sz, P.items, 16);
     const line = y + sz + 8;
-    if (slots.length === 2) {
-      result = PS.findRecipe(slots);
+    const ready = slots[0] && slots[1];
+    if (ready) {
+      const result = PS.findRecipe([slots[0], slots[1]]);
       const known = result && result.unlockLevel <= G.state.level;
-      this.icon(G, result && known ? result.icon : 'potion_sludge', rx + sz / 2, y + sz / 2, 80, P.items, 'UI', 17);
-      const label = result && known
-        ? result.name + '  ·  sells for ~' + Math.round(result.price * G.mult('fine_bottles', +1)) + 'g'
-        : 'Unknown mix: this makes Murky Sludge (worth nothing)';
-      this.text(G, label, area.x, line, area.w, 24, result && known ? COLORS.ink : COLORS.red, 'center', P.items, 'UI', 17);
+      this.icon(G, result && known ? result.icon : 'potion_sludge', xs[3] + sz / 2, y + sz / 2, 74, P.items, 'UI', 17);
+      let label;
+      let color = COLORS.ink;
+      if (!result || !known) {
+        label = 'Unknown mix: Murky Sludge (worthless, may explode)';
+        color = COLORS.red;
+      } else {
+        const extra = slots[2];
+        let q = 'Standard';
+        if (extra === 'starbloom') q = 'Superb';
+        else if (extra === 'glowcap') q = 'Fine, fast and safe';
+        else if (extra && G.state.discovered.includes(result.id) && extra === result.bonus) q = 'Fine';
+        else if (extra) {
+          q = 'unknown extra herb (could go wrong!)';
+          color = '170;90;30';
+        }
+        label = result.name + '  ·  ' + q;
+      }
+      this.text(G, label, area.x, line, area.w, 24, color, 'center', P.items, 'UI', 17);
     } else {
-      this.text(G, '?', rx, y + 18, sz, 56, COLORS.muted, 'center', P.items, 'UI', 17);
+      this.text(G, '?', xs[3], y + 16, sz, 56, COLORS.muted, 'center', P.items, 'UI', 17);
       this.text(G, 'Pick 2 ingredients, or tap a recipe below', area.x, line, area.w, 24, COLORS.muted, 'center',
         P.items, 'UI', 17);
     }
@@ -2052,71 +2240,74 @@ PS.UI = {
     this.button(G, P, cx - 150, y, 300, 76, 'BtnGreen', 'BREW', {
       size: 38,
       icon: 'icon_brew',
-      disabled: slots.length < 2,
+      disabled: !ready,
       onTap: () => {
-        if (PS.Brewing.request(G, c, slots)) this.close(G);
+        if (PS.Brewing.request(G, c, slots.filter((x) => x))) this.close(G);
       },
       onDisabled: () => this.toast(G, 'Add two ingredients first'),
     });
-    y += 92;
-    // Ingredients grid
-    this.text(G, 'Ingredients', area.x, y, area.w, 28, COLORS.ink, 'left', P.items, 'UI', 16);
-    y += 36;
-    const ings = PS.data.ingredients.filter((i) => i.unlockLevel <= G.state.level);
-    const cols = 4;
+    y += 90;
+    // Ingredients: unlocked herbs plus any rare herb in stock.
+    this.text(G, 'Ingredients  (a 3rd herb is optional)', area.x, y, area.w, 26, COLORS.ink, 'left', P.items, 'UI', 16);
+    y += 34;
+    const ings = PS.data.ingredients.filter((i) => i.unlockLevel <= G.state.level || (inv[i.id] || 0) > 0);
+    const cols = ings.length > 8 ? 5 : 4;
     const cw = area.w / cols;
-    const ch = 112;
+    const ch = 100;
     ings.forEach((ing, k) => {
       const x = area.x + (k % cols) * cw;
       const yy = y + Math.floor(k / cols) * ch;
       const left = (inv[ing.id] || 0) - (used[ing.id] || 0);
       this.panelBox(G, left > 0 ? 'PanelParchment' : 'BtnGray', x + 4, yy, cw - 8, ch - 8, P.items, 16);
-      this.icon(G, ing.icon, x + cw / 2, yy + 38, 60, P.items, 'UI', 17);
-      this.text(G, ing.name, x, yy + 66, cw, 20, COLORS.ink, 'center', P.items, 'UI', 17);
-      const cnt = this.text(G, 'x' + left, x + cw - 50, yy + 4, 44, 22, left <= 2 ? COLORS.red : COLORS.green, 'right',
-        P.items, 'UI', 17);
-      void cnt;
+      this.icon(G, ing.icon, x + cw / 2, yy + 34, 54, P.items, 'UI', 17);
+      this.text(G, ing.name, x, yy + 62, cw, 19, ing.rare ? '150;90;10' : COLORS.ink, 'center', P.items, 'UI', 17);
+      this.text(G, 'x' + left, x + cw - 50, yy + 4, 44, 20, left <= 2 ? COLORS.red : COLORS.green, 'right', P.items, 'UI', 17);
       this.hit(P.hits, x + 4, yy, cw - 8, ch - 8, () => {
         if (left <= 0) {
           this.toast(G, 'Out of ' + ing.name + ' — buy more in Herbs');
           return;
         }
-        if (slots.length >= 2) slots.shift();
-        slots.push(ing.id);
+        const free = slots.indexOf(null);
+        slots[free >= 0 ? free : 2] = ing.id;
         PS.Audio.play(G, 'tap');
         this.rebuild(G);
-      });
+      }, 'ing:' + ing.id);
     });
-    y += Math.ceil(ings.length / cols) * ch + 6;
+    y += Math.ceil(ings.length / cols) * ch + 4;
     // Recipe book (rows with waiting orders first)
-    this.text(G, 'Recipe book — tap to fill', area.x, y, area.w, 26, COLORS.ink, 'left', P.items, 'UI', 16);
-    y += 34;
+    this.text(G, 'Recipe book — tap to fill', area.x, y, area.w, 24, COLORS.ink, 'left', P.items, 'UI', 16);
+    y += 30;
     const pend = PS.World.pendingOrders(G).concat(G.customers.filter((cc) => cc.state === 'waitingOrder'));
     const recipes = PS.Brewing.knownRecipes(G)
       .map((r) => ({ r, n: pend.filter((cc) => cc.recipe.id === r.id).length }))
       .sort((a, b) => b.n - a.n);
-    const rh = 64;
+    const rh = 60;
     const room = Math.max(1, Math.floor((area.y + area.h - y) / rh));
     recipes.slice(0, room).forEach(({ r, n }, k) => {
       const yy = y + k * rh;
       const ok = PS.Brewing.canBrew(G, r);
       this.panelBox(G, 'PanelParchment', area.x, yy, area.w, rh - 6, P.items, 16);
-      this.icon(G, r.icon, area.x + 32, yy + 29, 48, P.items, 'UI', 17);
-      this.text(G, r.name, area.x + 62, yy + 14, 220, 26, COLORS.ink, 'left', P.items, 'UI', 17);
+      this.icon(G, r.icon, area.x + 30, yy + 27, 44, P.items, 'UI', 17);
+      this.text(G, r.name, area.x + 58, yy + 13, 240, 24, COLORS.ink, 'left', P.items, 'UI', 17);
       r.ingredients.forEach((id, j) => {
         const ing = PS.data.ingredientById[id];
-        this.icon(G, ing.icon, area.x + 300 + j * 52, yy + 29, 40, P.items, 'UI', 17);
-        if ((inv[id] || 0) <= 0) this.icon(G, 'icon_close', area.x + 316 + j * 52, yy + 44, 18, P.items, 'UI', 18);
+        this.icon(G, ing.icon, area.x + 300 + j * 46, yy + 27, 36, P.items, 'UI', 17);
+        if ((inv[id] || 0) <= 0) this.icon(G, 'icon_close', area.x + 314 + j * 46, yy + 40, 16, P.items, 'UI', 18);
       });
+      // Bonus herb once discovered, otherwise a hint that one exists.
+      const found = G.state.discovered.includes(r.id);
+      this.text(G, '+', area.x + 384, yy + 12, 20, 26, COLORS.muted, 'center', P.items, 'UI', 17);
+      if (found) this.icon(G, PS.data.ingredientById[r.bonus].icon, area.x + 420, yy + 27, 34, P.items, 'UI', 17);
+      else this.text(G, '?', area.x + 404, yy + 12, 32, 26, COLORS.muted, 'center', P.items, 'UI', 17);
       if (n > 0) {
-        this.panelBox(G, 'BtnRed', area.x + area.w - 118, yy + 10, 108, 38, P.items, 17);
-        this.text(G, n + ' wanted', area.x + area.w - 118, yy + 16, 108, 22, '255;255;255', 'center', P.items, 'UI', 18);
+        this.panelBox(G, 'BtnRed', area.x + area.w - 110, yy + 9, 100, 36, P.items, 17);
+        this.text(G, n + ' wanted', area.x + area.w - 110, yy + 15, 100, 20, '255;255;255', 'center', P.items, 'UI', 18);
       }
       this.hit(P.hits, area.x, yy, area.w, rh - 6, () => {
         if (!ok) this.toast(G, 'Missing ingredients for ' + r.name);
-        P.params.slots = r.ingredients.slice();
+        P.params.slots = PS.Brewing.bestIngredients(G, r);
         this.rebuild(G);
-      });
+      }, 'recipe:' + r.id);
     });
   },
 
@@ -2173,7 +2364,7 @@ PS.UI = {
           size: 26,
           disabled: !idle || !can,
           onTap: () => {
-            if (PS.Brewing.request(G, idle, r.ingredients)) this.rebuild(G);
+            if (PS.Brewing.request(G, idle, PS.Brewing.bestIngredients(G, r))) this.rebuild(G);
           },
           onDisabled: () => this.toast(G, !idle ? 'All cauldrons are busy' : 'Missing ingredients'),
         });
@@ -2186,15 +2377,32 @@ PS.UI = {
   buildIngredients(G, P) {
     const area = this.frame(G, P, 'Herb shop', 1000);
     const inv = G.state.inventory;
+    // Entrance to the herb garden (optional free herbs).
+    const gardenOpen = G.state.level >= PS.data.balance.gardenLevel;
+    this.button(G, P, area.x, area.y - 6, area.w, 64, gardenOpen ? 'BtnGreen' : 'BtnGray',
+      gardenOpen ? 'Visit the Herb Garden' : 'Herb Garden opens at shop level ' + PS.data.balance.gardenLevel, {
+        tag: 'garden',
+        icon: 'icon_garden',
+        size: 26,
+        disabled: !gardenOpen,
+        onTap: () => G.goToGarden(),
+        onDisabled: () => this.toast(G, 'Reach shop level ' + PS.data.balance.gardenLevel + ' to open the garden'),
+      });
+    area.y += 70;
+    area.h -= 70;
     const rows = PS.data.ingredients.map((ing) => (x, y, w, h) => {
       const locked = ing.unlockLevel > G.state.level;
+      const n0 = inv[ing.id] || 0;
       this.panelBox(G, locked ? 'BtnGray' : 'PanelParchment', x, y, w, h, P.items, 16);
       this.icon(G, ing.icon, x + 46, y + h / 2, 70, P.items, 'UI', 17);
       this.text(G, ing.name, x + 92, y + 12, 240, 28, COLORS.ink, 'left', P.items, 'UI', 17);
       if (locked) {
         this.icon(G, 'icon_lock', x + w - 60, y + h / 2, 44, P.items, 'UI', 17);
-        this.text(G, 'Unlocks at shop level ' + ing.unlockLevel, x + 92, y + 52, 330, 22, COLORS.muted, 'left',
-          P.items, 'UI', 17);
+        this.text(G, ing.rare ? 'Rare: found in the Garden. Sold from shop level ' + ing.unlockLevel
+          : 'Unlocks at shop level ' + ing.unlockLevel, x + 92, y + 46, w - 170, 20, COLORS.muted, 'left', P.items, 'UI', 17);
+        if (ing.rare && n0 > 0) {
+          this.text(G, 'In stock: ' + n0, x + 92, y + 72, 200, 20, COLORS.green, 'left', P.items, 'UI', 17);
+        }
         return;
       }
       const n = inv[ing.id] || 0;
@@ -2581,7 +2789,8 @@ PS.UI = {
     const bubble = this.ensure(G, c.ui, 'bubble', 'SpeechBubble', 1);
     const icon = this.ensure(G, c.ui, 'icon', 'Icon', 2);
     const glow = this.ensure(G, c.ui, 'glow', 'Glow', 0);
-    const show = done || c.state === 'reserved';
+    const dirty = c.state === 'dirty';
+    const show = done || dirty || c.state === 'reserved';
     bubble.hide(!show || !p);
     icon.hide(!show || !p);
     glow.hide(!done || !p);
@@ -2592,7 +2801,7 @@ PS.UI = {
       bubble.setWidth(bw);
       bubble.setHeight(bh);
       bubble.setPosition(p[0] - bw / 2, p[1] - bh);
-      icon.setAnimationName(done ? c.recipe.icon : 'icon_hourglass');
+      icon.setAnimationName(done ? c.recipe.icon : dirty ? 'icon_broom' : 'icon_hourglass');
       icon.setWidth(46 * s);
       icon.setHeight(46 * s);
       icon.setPosition(p[0] - 23 * s, p[1] - bh + 8 * s);
@@ -2600,6 +2809,18 @@ PS.UI = {
       glow.setHeight(130);
       glow.setPosition(p[0] - 65, p[1] - bh / 2 - 65);
       glow.setOpacity(120 + 60 * Math.sin(G.time * 4));
+    }
+    // Quality stars under a finished potion (none for Poor).
+    for (let i = 0; i < 3; i++) {
+      const st = this.ensure(G, c.ui, 'star' + i, 'Icon', 3);
+      const on = done && p && c.quality >= 2 && i < c.quality;
+      st.hide(!on);
+      if (on) {
+        st.setAnimationName('icon_star');
+        st.setWidth(20);
+        st.setHeight(20);
+        st.setPosition(p[0] - 10 + (i - (c.quality - 1) / 2) * 20, p[1] - 6);
+      }
     }
     // Plan badge
     const plan = PS.Workers.planIndex(G, c);
@@ -2792,16 +3013,8 @@ PS.UI = {
     PS.Input.worldTap(G, x, y);
   },
 
-  // ------------------------------------------------------------ frame
-  update(G, dt) {
-    this.handleInput(G);
-    this.updateHud(G);
-    for (const c of G.customers) this.updateCustomerOverlay(G, c);
-    for (const c of G.cauldrons) if (c.unlocked) this.updateCauldronOverlay(G, c);
-    for (const w of G.workers) this.updateWorkerOverlay(G, w);
-    this.updateCounterOverlay(G);
-    for (const st of G.seats) this.updateSlotOverlay(G, st, 'extra_table');
-    for (const c of G.cauldrons) this.updateSlotOverlay(G, c, 'extra_cauldron');
+  // Floating texts and the toast message (also used by the garden scene).
+  updateTransient(G, dt) {
     // Floating texts
     for (let i = G.ui.floats.length - 1; i >= 0; i--) {
       const f = G.ui.floats[i];
@@ -2823,6 +3036,19 @@ PS.UI = {
         G.ui.toast = null;
       }
     }
+  },
+
+  // ------------------------------------------------------------ frame
+  update(G, dt) {
+    this.handleInput(G);
+    this.updateHud(G);
+    for (const c of G.customers) this.updateCustomerOverlay(G, c);
+    for (const c of G.cauldrons) if (c.unlocked) this.updateCauldronOverlay(G, c);
+    for (const w of G.workers) this.updateWorkerOverlay(G, w);
+    this.updateCounterOverlay(G);
+    for (const st of G.seats) this.updateSlotOverlay(G, st, 'extra_table');
+    for (const c of G.cauldrons) this.updateSlotOverlay(G, c, 'extra_cauldron');
+    this.updateTransient(G, dt);
     // Live panels refresh a few times per second (timers, patience bars).
     G.ui.refreshTimer -= dt;
     const live = G.ui.panel && (G.ui.panel.name === 'orders' || G.ui.panel.name === 'workers' || G.ui.dirty);
@@ -2858,6 +3084,7 @@ PS.Input = {
       if (c.unlocked) {
         consider(c.x, c.y, 45, 'cauldron', c);
         consider(c.x, c.y, 120, 'cauldron', c);
+        if (c.spill) consider(c.x, c.y + 50, 2, 'cauldron', c, 10);
       } else if (c.sign) consider(c.x, c.y, 30, 'slot', 'cauldron');
     }
     for (const s of G.seats) if (s.sign) consider(s.obj.getX(), s.obj.getY(), 30, 'slot', 'table');
@@ -2886,7 +3113,7 @@ PS.Input = {
       const brewing = G.cauldrons.find((k) => (k.state === 'brewing' || k.state === 'reserved') && k.recipe.id === c.recipe.id);
       if (brewing) return PS.UI.toast(G, c.recipe.name + ' is brewing...');
       const idle = PS.Brewing.idleCauldron(G);
-      if (idle) PS.UI.open(G, 'brew', { cauldron: idle, slots: c.recipe.ingredients.slice() });
+      if (idle) PS.UI.open(G, 'brew', { cauldron: idle, slots: PS.Brewing.bestIngredients(G, c.recipe) });
       else PS.UI.toast(G, 'Wants a ' + c.recipe.name + ' — all cauldrons are busy');
     } else {
       PS.UI.toast(G, 'Waiting for a free table');
@@ -2898,9 +3125,11 @@ PS.Input = {
       // Pre-fill with the oldest order that is not covered yet.
       const orders = PS.World.pendingOrders(G);
       const want = orders.find((o) => PS.Brewing.plannedFor(G, o.recipe.id) < orders.filter((x) => x.recipe.id === o.recipe.id).length);
-      PS.UI.open(G, 'brew', { cauldron: c, slots: want ? want.recipe.ingredients.slice() : [] });
+      PS.UI.open(G, 'brew', { cauldron: c, slots: want ? PS.Brewing.bestIngredients(G, want.recipe) : [] });
     } else if (c.state === 'done') {
       PS.Workers.enqueue(G, { type: 'collect', target: c });
+    } else if (c.state === 'dirty') {
+      PS.Workers.enqueue(G, { type: 'clean', target: c });
     } else if (c.state === 'brewing') {
       PS.UI.toast(G, c.recipe.name + ' ready in ' + U.formatTime(c.dur - c.t));
     } else {
@@ -2910,7 +3139,7 @@ PS.Input = {
 };
 
 };
-gdjs.ShopCode.userFunc0x8ba3c8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e908 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game state, progression and main loop =====
 const PS = gdjs.PotionShop;
@@ -2944,6 +3173,7 @@ PS.Game = class {
     this.scene = runtimeScene;
     this.time = 0;
     this.fx = [];
+    this.stockQuality = {}; // quality of each potion stored on the counter
     this.started = false;
     this.saveTimer = 0;
     this.needSave = false;
@@ -3087,7 +3317,7 @@ PS.Game = class {
     // nothing paid for is lost when the game is closed.
     const s = JSON.parse(JSON.stringify(this.state));
     for (const c of this.cauldrons) {
-      if (c.recipe && c.recipe.id !== 'sludge' && (c.state === 'brewing' || c.state === 'done' || c.state === 'reserved')) {
+      if (c.recipe && c.recipe.id !== 'sludge' && !c.accident && (c.state === 'brewing' || c.state === 'done' || c.state === 'reserved')) {
         s.stock[c.recipe.id] = (s.stock[c.recipe.id] || 0) + 1;
       }
     }
@@ -3124,8 +3354,16 @@ PS.Game = class {
     this.scene.requestChange(gdjs.SceneChangeRequest.REPLACE_SCENE, 'Shop');
   }
 
+  // ----- herb garden (a separate scene pushed on top of the paused shop)
+  goToGarden() {
+    PS.UI.close(this);
+    this.saveNow();
+    this.scene.requestChange(gdjs.SceneChangeRequest.PUSH_SCENE, 'Garden');
+  }
+
   // ----- main loop
   update() {
+    PS.proj.scene = this.scene; // the garden scene may have changed it
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     // PS.simSteps > 1 runs the simulation several times per frame (automated tests only).
     const steps = PS.simSteps || 1;
@@ -3143,7 +3381,7 @@ PS.Game = class {
 };
 
 };
-gdjs.ShopCode.userFunc0x8ba498 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x92e9e0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // Create the game once the systems above are defined.
 const PS = gdjs.PotionShop;
@@ -3162,7 +3400,7 @@ gdjs.ShopCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.ShopCode.userFunc0x977090(runtimeScene);
+gdjs.ShopCode.userFunc0x92e208(runtimeScene);
 
 }
 
@@ -3170,7 +3408,7 @@ gdjs.ShopCode.userFunc0x977090(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8e7d38(runtimeScene);
+gdjs.ShopCode.userFunc0x92e2f8(runtimeScene);
 
 }
 
@@ -3178,7 +3416,7 @@ gdjs.ShopCode.userFunc0x8e7d38(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8e7dc8(runtimeScene);
+gdjs.ShopCode.userFunc0x92e3c0(runtimeScene);
 
 }
 
@@ -3186,7 +3424,7 @@ gdjs.ShopCode.userFunc0x8e7dc8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8e7e90(runtimeScene);
+gdjs.ShopCode.userFunc0x92e488(runtimeScene);
 
 }
 
@@ -3194,7 +3432,7 @@ gdjs.ShopCode.userFunc0x8e7e90(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8e7fb0(runtimeScene);
+gdjs.ShopCode.userFunc0x92e5a8(runtimeScene);
 
 }
 
@@ -3202,7 +3440,7 @@ gdjs.ShopCode.userFunc0x8e7fb0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x98dab8(runtimeScene);
+gdjs.ShopCode.userFunc0x92e680(runtimeScene);
 
 }
 
@@ -3210,7 +3448,7 @@ gdjs.ShopCode.userFunc0x98dab8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8e80e8(runtimeScene);
+gdjs.ShopCode.userFunc0x92e758(runtimeScene);
 
 }
 
@@ -3218,7 +3456,7 @@ gdjs.ShopCode.userFunc0x8e80e8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8e81c0(runtimeScene);
+gdjs.ShopCode.userFunc0x92e830(runtimeScene);
 
 }
 
@@ -3226,7 +3464,7 @@ gdjs.ShopCode.userFunc0x8e81c0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8ba3c8(runtimeScene);
+gdjs.ShopCode.userFunc0x92e908(runtimeScene);
 
 }
 
@@ -3234,12 +3472,12 @@ gdjs.ShopCode.userFunc0x8ba3c8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x8ba498(runtimeScene);
+gdjs.ShopCode.userFunc0x92e9e0(runtimeScene);
 
 }
 
 
-};gdjs.ShopCode.userFunc0x8b9470 = function GDJSInlineCode(runtimeScene) {
+};gdjs.ShopCode.userFunc0x8ba058 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const game = runtimeScene.__potionShop;
 if (game) game.update();
@@ -3265,7 +3503,7 @@ gdjs.ShopCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.ShopCode.userFunc0x8b9470(runtimeScene);
+gdjs.ShopCode.userFunc0x8ba058(runtimeScene);
 
 }
 
@@ -3325,6 +3563,8 @@ gdjs.ShopCode.GDApprenticeBrambleObjects1.length = 0;
 gdjs.ShopCode.GDApprenticeBrambleObjects2.length = 0;
 gdjs.ShopCode.GDLiquidObjects1.length = 0;
 gdjs.ShopCode.GDLiquidObjects2.length = 0;
+gdjs.ShopCode.GDSpillObjects1.length = 0;
+gdjs.ShopCode.GDSpillObjects2.length = 0;
 gdjs.ShopCode.GDBubbleObjects1.length = 0;
 gdjs.ShopCode.GDBubbleObjects2.length = 0;
 gdjs.ShopCode.GDNavBlockObjects1.length = 0;
@@ -3417,6 +3657,8 @@ gdjs.ShopCode.GDApprenticeBrambleObjects1.length = 0;
 gdjs.ShopCode.GDApprenticeBrambleObjects2.length = 0;
 gdjs.ShopCode.GDLiquidObjects1.length = 0;
 gdjs.ShopCode.GDLiquidObjects2.length = 0;
+gdjs.ShopCode.GDSpillObjects1.length = 0;
+gdjs.ShopCode.GDSpillObjects2.length = 0;
 gdjs.ShopCode.GDBubbleObjects1.length = 0;
 gdjs.ShopCode.GDBubbleObjects2.length = 0;
 gdjs.ShopCode.GDNavBlockObjects1.length = 0;

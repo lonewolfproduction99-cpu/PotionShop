@@ -18,6 +18,7 @@ PS.loadData = function (runtimeScene) {
     color: String(r.Color || '200;200;200'),
     icon: String(r.Icon || 'potion_sludge'),
     unlockLevel: Number(r.UnlockLevel) || 1,
+    bonus: r.Bonus ? String(r.Bonus) : null, // extra herb that makes it Fine quality
   }));
   const ingredients = (read('Ingredients') || []).map((i) => ({
     id: String(i.Id),
@@ -26,6 +27,7 @@ PS.loadData = function (runtimeScene) {
     bundle: Number(i.Bundle) || 5,
     icon: String(i.Icon || 'ing_redleaf'),
     unlockLevel: Number(i.UnlockLevel) || 1,
+    rare: !!i.Rare,
   }));
   const customers = (read('CustomerTypes') || []).map((c) => ({
     id: String(c.Id),
@@ -76,6 +78,12 @@ PS.loadData = function (runtimeScene) {
     apprenticeSlowness: Number(b.ApprenticeSlowness) || 1.15, // apprentices start a bit slower than the owner
     workerUpgradeBase: Number(b.WorkerUpgradeBase) || 50,
     workerUpgradeGrowth: Number(b.WorkerUpgradeGrowth) || 1.65,
+    accidentWrongExtra: Number(b.AccidentWrongExtra) || 0.55, // chance a wrong extra herb explodes
+    accidentSludge: Number(b.AccidentSludge) || 0.4,
+    cleanTime: Number(b.CleanTime) || 3,
+    gardenRegrow: Number(b.GardenRegrow) || 45, // seconds for a garden plot to regrow
+    gardenRareChance: Number(b.GardenRareChance) || 0.08,
+    gardenLevel: Number(b.GardenLevel) || 2,
   };
 
   PS.data = {

@@ -244,16 +244,17 @@ PS.World = {
   },
 
   // Called when a potion is handed over.
-  serve(G, c, recipe) {
+  serve(G, c, recipe, quality) {
+    const q = PS.QUALITY[quality === undefined ? 1 : quality];
     const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
     const tip = 1 + PS.data.balance.tipMax * ratio;
-    const price = Math.round(recipe.price * G.mult('fine_bottles', +1) * tip * c.type.tip);
+    const price = Math.round(recipe.price * q.price * G.mult('fine_bottles', +1) * tip * c.type.tip);
     G.addGold(price);
     G.state.served += 1;
     G.state.earned += price;
     G.addXp(PS.data.balance.xpPerServe + Math.round(5 * ratio));
-    G.recordSatisfaction(50 + 50 * ratio);
-    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, '+' + price, 'icon_coin');
+    G.recordSatisfaction(U.clamp(50 + 50 * ratio + q.mood, 0, 100));
+    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, '+' + price + (quality !== 1 ? '  ' + q.name + '!' : ''), 'icon_coin');
     c.state = 'served';
     c.timer = 1.3;
     c.obj.setZ(0);

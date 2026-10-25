@@ -30,6 +30,7 @@ PS.Game = class {
     this.scene = runtimeScene;
     this.time = 0;
     this.fx = [];
+    this.stockQuality = {}; // quality of each potion stored on the counter
     this.started = false;
     this.saveTimer = 0;
     this.needSave = false;
@@ -173,7 +174,7 @@ PS.Game = class {
     // nothing paid for is lost when the game is closed.
     const s = JSON.parse(JSON.stringify(this.state));
     for (const c of this.cauldrons) {
-      if (c.recipe && c.recipe.id !== 'sludge' && (c.state === 'brewing' || c.state === 'done' || c.state === 'reserved')) {
+      if (c.recipe && c.recipe.id !== 'sludge' && !c.accident && (c.state === 'brewing' || c.state === 'done' || c.state === 'reserved')) {
         s.stock[c.recipe.id] = (s.stock[c.recipe.id] || 0) + 1;
       }
     }
@@ -210,8 +211,16 @@ PS.Game = class {
     this.scene.requestChange(gdjs.SceneChangeRequest.REPLACE_SCENE, 'Shop');
   }
 
+  // ----- herb garden (a separate scene pushed on top of the paused shop)
+  goToGarden() {
+    PS.UI.close(this);
+    this.saveNow();
+    this.scene.requestChange(gdjs.SceneChangeRequest.PUSH_SCENE, 'Garden');
+  }
+
   // ----- main loop
   update() {
+    PS.proj.scene = this.scene; // the garden scene may have changed it
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     // PS.simSteps > 1 runs the simulation several times per frame (automated tests only).
     const steps = PS.simSteps || 1;

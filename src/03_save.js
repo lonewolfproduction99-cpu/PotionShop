@@ -14,8 +14,9 @@ PS.Save = {
   STORAGE: 'PotionShop',
   KEY: 'save',
   VERSION: 2,
-  META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes'],
-  RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers'],
+  META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes',
+    'discovered', 'accidents'],
+  RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers', 'garden'],
 
   defaults() {
     const d = PS.data;
@@ -39,6 +40,9 @@ PS.Save = {
       prestige: 0,
       gems: 0,
       workers: [], // hired apprentices: { type, role, stats: { speed, brew, service } }
+      discovered: [], // recipes whose bonus herb was found
+      accidents: 0,
+      garden: [], // herb garden plots: { herb, readyAt (ms timestamp) }
     };
   },
 
@@ -69,6 +73,14 @@ PS.Save = {
     }
     if (Array.isArray(raw.seenRecipes)) s.seenRecipes = raw.seenRecipes.filter((id) => PS.data.recipeById[id]);
     s.prestige = Math.floor(num(raw.prestige, 0, 0, 999));
+    if (Array.isArray(raw.discovered)) s.discovered = raw.discovered.filter((id) => PS.data.recipeById[id]);
+    s.accidents = Math.floor(num(raw.accidents, 0, 0, 1e9));
+    if (Array.isArray(raw.garden)) {
+      s.garden = raw.garden.slice(0, 16).map((p) => ({
+        herb: p && PS.data.ingredientById[p.herb] ? p.herb : 'redleaf',
+        readyAt: num(p && p.readyAt, 0, 0, 1e15),
+      }));
+    }
     s.gems = Math.floor(num(raw.gems, 0, 0, 1e9));
     if (Array.isArray(raw.workers)) {
       const types = PS.data.workerTypes;

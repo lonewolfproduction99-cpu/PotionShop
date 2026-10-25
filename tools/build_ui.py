@@ -207,6 +207,25 @@ def ingredient_icon(kind):
             poly(d, pts, c)
         d.line([S(48), S(50), S(48), S(90)], fill=hexc("2f7a4a"), width=S(4))
         shine(d, (40, 18, 46, 30))
+    elif kind == "starbloom":  # rare: glowing golden star flower
+        d.line([S(48), S(52), S(48), S(92)], fill=hexc("2f7a4a"), width=S(5))
+        poly(d, [(48, 70), (30, 60), (34, 74)], hexc("4fa060"), width=2)
+        for r, col in ((40, (255, 240, 150, 90)), (30, (255, 230, 120, 140))):
+            ellipse(d, (48 - r, 34 - r, 48 + r, 34 + r), col, outline=None)
+        pts = []
+        for k in range(10):
+            a = -math.pi / 2 + k * math.pi / 5
+            rr = 28 if k % 2 == 0 else 11
+            pts.append((48 + rr * math.cos(a), 34 + rr * math.sin(a)))
+        poly(d, pts, (255, 214, 60, 255), width=3)
+        ellipse(d, (41, 27, 55, 41), (255, 250, 220, 255), width=2)
+    elif kind == "glowcap":  # rare: glowing cyan mushroom
+        ellipse(d, (10, 6, 86, 82), (120, 255, 240, 70), outline=None)
+        rrect(d, (38, 46, 58, 90), 6, (220, 250, 245, 255))
+        d.pieslice([S(12), S(12), S(84), S(80)], 180, 360, fill=(60, 220, 210, 255), outline=OUTLINE, width=S(3))
+        d.line([S(12), S(46), S(84), S(46)], fill=OUTLINE, width=S(3))
+        for (x, y, r) in ((30, 32, 5), (50, 22, 6), (68, 34, 4)):
+            ellipse(d, (x - r, y - r, x + r, y + r), (230, 255, 250, 255), outline=None)
     return done(img, 96, 96)
 
 
@@ -343,6 +362,25 @@ def icon(kind):
         ellipse(d, (8, 8, 88, 88), (250, 240, 220, 255), width=4)
         d.line([S(48), S(48), S(48), S(22)], fill=OUTLINE, width=S(6))
         d.line([S(48), S(48), S(66), S(58)], fill=OUTLINE, width=S(6))
+    elif kind == "garden":
+        rrect(d, (10, 56, 86, 88), 6, (130, 90, 50, 255), width=4)
+        for x in (24, 48, 72):
+            d.line([S(x), S(58), S(x), S(30)], fill=hexc("2f7a4a"), width=S(5))
+            ellipse(d, (x - 11, 14, x + 11, 36), (90, 190, 80, 255), width=3)
+    elif kind == "back":
+        ellipse(d, (6, 6, 90, 90), (90, 150, 220, 255), width=4)
+        poly(d, [(26, 48), (50, 24), (50, 38), (72, 38), (72, 58), (50, 58), (50, 72)], (255, 255, 255, 255), width=3)
+    elif kind == "goggles":
+        d.line([S(8), S(46), S(88), S(46)], fill=(110, 70, 40, 255), width=S(8))
+        for cx in (30, 66):
+            ellipse(d, (cx - 20, 26, cx + 20, 66), (150, 220, 255, 255), outline=(90, 94, 106, 255), width=6)
+            shine(d, (cx - 12, 32, cx - 4, 42))
+    elif kind == "skull":  # accident / spill warning
+        ellipse(d, (6, 6, 90, 90), (120, 200, 90, 255), width=4)
+        ellipse(d, (24, 18, 72, 62), (245, 245, 235, 255), width=3)
+        rrect(d, (34, 54, 62, 74), 4, (245, 245, 235, 255), width=3)
+        ellipse(d, (32, 32, 44, 46), OUTLINE, outline=None)
+        ellipse(d, (52, 32, 64, 46), OUTLINE, outline=None)
     elif kind == "quality":
         poly(d, [(48, 6), (86, 36), (48, 90), (10, 36)], (120, 220, 240, 255), width=4)
         poly(d, [(48, 6), (66, 36), (48, 90), (30, 36)], (170, 240, 255, 255), width=2)
@@ -504,11 +542,13 @@ def main():
                "night": ("moon", "5a3aa0"), "fire": ("flame", "e0502a")}
     for name, (kind, col) in potions.items():
         potion_icon(kind, col).save(os.path.join(OUT, "potion_%s.png" % name))
-    for name in ("redleaf", "moonwater", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint"):
+    for name in ("redleaf", "moonwater", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom",
+                 "glowcap"):
         ingredient_icon(name).save(os.path.join(OUT, "ing_%s.png" % name))
     for name in ("coin", "heart", "star", "gear", "orders", "bag", "upgrades", "workers", "expand", "close",
                  "check", "plus", "lock", "hourglass", "broom", "brew", "order", "book", "sparkle", "exclaim",
-                 "sound", "trash", "speed", "tables", "patience", "quality"):
+                 "sound", "trash", "speed", "tables", "patience", "quality", "garden", "back", "goggles",
+                 "skull"):
         icon(name).save(os.path.join(OUT, "icon_%s.png" % name))
     for name in ("happy", "neutral", "annoyed", "angry"):
         mood_icon(name).save(os.path.join(OUT, "mood_%s.png" % name))

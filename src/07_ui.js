@@ -310,49 +310,65 @@ PS.UI = {
     }
   },
 
-  // ----- Brew panel: pick two ingredients (or a recipe) for a cauldron.
+  // ----- Brew panel: two ingredients (or a recipe) plus an optional extra herb.
   buildBrew(G, P) {
     const c = P.params.cauldron;
-    if (!P.params.slots) P.params.slots = [];
-    const slots = P.params.slots;
-    const area = this.frame(G, P, 'Brew a potion', 1000);
+    const given = P.params.slots || [];
+    const slots = (P.params.slots = [given[0] || null, given[1] || null, given[2] || null]);
+    const area = this.frame(G, P, 'Brew a potion', 1040);
     const inv = G.state.inventory;
     const used = {};
-    slots.forEach((id) => (used[id] = (used[id] || 0) + 1));
-    // Slots + result
+    slots.forEach((id) => id && (used[id] = (used[id] || 0) + 1));
     let y = area.y;
     const cx = area.x + area.w / 2;
-    const sz = 104;
-    const xs = [cx - 250, cx - 110];
-    for (let i = 0; i < 2; i++) {
-      this.panelBox(G, 'PanelParchment', xs[i], y, sz, sz, P.items, 16);
+    const sz = 96;
+    const gap = 40;
+    const x0 = cx - (4 * sz + 3 * gap) / 2;
+    const xs = [x0, x0 + sz + gap, x0 + 2 * (sz + gap), x0 + 3 * (sz + gap)];
+    for (let i = 0; i < 3; i++) {
+      const extraSlot = i === 2;
+      this.panelBox(G, extraSlot ? 'PanelDark' : 'PanelParchment', xs[i], y, sz, sz, P.items, 16);
       if (slots[i]) {
-        this.icon(G, PS.data.ingredientById[slots[i]].icon, xs[i] + sz / 2, y + sz / 2, 76, P.items, 'UI', 17);
+        this.icon(G, PS.data.ingredientById[slots[i]].icon, xs[i] + sz / 2, y + sz / 2, 70, P.items, 'UI', 17);
         this.hit(P.hits, xs[i], y, sz, sz, () => {
-          slots.splice(i, 1);
+          slots[i] = null;
           this.rebuild(G);
-        });
+        }, 'slot:' + i);
       } else {
-        this.text(G, '+', xs[i], y + 18, sz, 56, COLORS.muted, 'center', P.items, 'UI', 17);
+        this.text(G, extraSlot ? 'extra\n(optional)' : '+', xs[i], y + (extraSlot ? 26 : 16), sz, extraSlot ? 20 : 56,
+          extraSlot ? '230;220;200' : COLORS.muted, 'center', P.items, 'UI', 17);
       }
     }
-    this.text(G, '+', cx - 146, y + 26, 36, 44, COLORS.ink, 'center', P.items, 'UI', 17);
-    this.text(G, '=', cx + 6, y + 26, 36, 44, COLORS.ink, 'center', P.items, 'UI', 17);
-    const rx = cx + 56;
-    this.panelBox(G, 'PanelParchment', rx, y, sz, sz, P.items, 16);
-    let result = null;
-    // Result name on its own line under the slots.
+    this.text(G, '+', xs[0] + sz, y + 24, gap, 44, COLORS.ink, 'center', P.items, 'UI', 17);
+    this.text(G, '+', xs[1] + sz, y + 24, gap, 44, COLORS.ink, 'center', P.items, 'UI', 17);
+    this.text(G, '=', xs[2] + sz, y + 24, gap, 44, COLORS.ink, 'center', P.items, 'UI', 17);
+    this.panelBox(G, 'PanelParchment', xs[3], y, sz, sz, P.items, 16);
     const line = y + sz + 8;
-    if (slots.length === 2) {
-      result = PS.findRecipe(slots);
+    const ready = slots[0] && slots[1];
+    if (ready) {
+      const result = PS.findRecipe([slots[0], slots[1]]);
       const known = result && result.unlockLevel <= G.state.level;
-      this.icon(G, result && known ? result.icon : 'potion_sludge', rx + sz / 2, y + sz / 2, 80, P.items, 'UI', 17);
-      const label = result && known
-        ? result.name + '  ·  sells for ~' + Math.round(result.price * G.mult('fine_bottles', +1)) + 'g'
-        : 'Unknown mix: this makes Murky Sludge (worth nothing)';
-      this.text(G, label, area.x, line, area.w, 24, result && known ? COLORS.ink : COLORS.red, 'center', P.items, 'UI', 17);
+      this.icon(G, result && known ? result.icon : 'potion_sludge', xs[3] + sz / 2, y + sz / 2, 74, P.items, 'UI', 17);
+      let label;
+      let color = COLORS.ink;
+      if (!result || !known) {
+        label = 'Unknown mix: Murky Sludge (worthless, may explode)';
+        color = COLORS.red;
+      } else {
+        const extra = slots[2];
+        let q = 'Standard';
+        if (extra === 'starbloom') q = 'Superb';
+        else if (extra === 'glowcap') q = 'Fine, fast and safe';
+        else if (extra && G.state.discovered.includes(result.id) && extra === result.bonus) q = 'Fine';
+        else if (extra) {
+          q = 'unknown extra herb (could go wrong!)';
+          color = '170;90;30';
+        }
+        label = result.name + '  ·  ' + q;
+      }
+      this.text(G, label, area.x, line, area.w, 24, color, 'center', P.items, 'UI', 17);
     } else {
-      this.text(G, '?', rx, y + 18, sz, 56, COLORS.muted, 'center', P.items, 'UI', 17);
+      this.text(G, '?', xs[3], y + 16, sz, 56, COLORS.muted, 'center', P.items, 'UI', 17);
       this.text(G, 'Pick 2 ingredients, or tap a recipe below', area.x, line, area.w, 24, COLORS.muted, 'center',
         P.items, 'UI', 17);
     }
@@ -360,71 +376,74 @@ PS.UI = {
     this.button(G, P, cx - 150, y, 300, 76, 'BtnGreen', 'BREW', {
       size: 38,
       icon: 'icon_brew',
-      disabled: slots.length < 2,
+      disabled: !ready,
       onTap: () => {
-        if (PS.Brewing.request(G, c, slots)) this.close(G);
+        if (PS.Brewing.request(G, c, slots.filter((x) => x))) this.close(G);
       },
       onDisabled: () => this.toast(G, 'Add two ingredients first'),
     });
-    y += 92;
-    // Ingredients grid
-    this.text(G, 'Ingredients', area.x, y, area.w, 28, COLORS.ink, 'left', P.items, 'UI', 16);
-    y += 36;
-    const ings = PS.data.ingredients.filter((i) => i.unlockLevel <= G.state.level);
-    const cols = 4;
+    y += 90;
+    // Ingredients: unlocked herbs plus any rare herb in stock.
+    this.text(G, 'Ingredients  (a 3rd herb is optional)', area.x, y, area.w, 26, COLORS.ink, 'left', P.items, 'UI', 16);
+    y += 34;
+    const ings = PS.data.ingredients.filter((i) => i.unlockLevel <= G.state.level || (inv[i.id] || 0) > 0);
+    const cols = ings.length > 8 ? 5 : 4;
     const cw = area.w / cols;
-    const ch = 112;
+    const ch = 100;
     ings.forEach((ing, k) => {
       const x = area.x + (k % cols) * cw;
       const yy = y + Math.floor(k / cols) * ch;
       const left = (inv[ing.id] || 0) - (used[ing.id] || 0);
       this.panelBox(G, left > 0 ? 'PanelParchment' : 'BtnGray', x + 4, yy, cw - 8, ch - 8, P.items, 16);
-      this.icon(G, ing.icon, x + cw / 2, yy + 38, 60, P.items, 'UI', 17);
-      this.text(G, ing.name, x, yy + 66, cw, 20, COLORS.ink, 'center', P.items, 'UI', 17);
-      const cnt = this.text(G, 'x' + left, x + cw - 50, yy + 4, 44, 22, left <= 2 ? COLORS.red : COLORS.green, 'right',
-        P.items, 'UI', 17);
-      void cnt;
+      this.icon(G, ing.icon, x + cw / 2, yy + 34, 54, P.items, 'UI', 17);
+      this.text(G, ing.name, x, yy + 62, cw, 19, ing.rare ? '150;90;10' : COLORS.ink, 'center', P.items, 'UI', 17);
+      this.text(G, 'x' + left, x + cw - 50, yy + 4, 44, 20, left <= 2 ? COLORS.red : COLORS.green, 'right', P.items, 'UI', 17);
       this.hit(P.hits, x + 4, yy, cw - 8, ch - 8, () => {
         if (left <= 0) {
           this.toast(G, 'Out of ' + ing.name + ' — buy more in Herbs');
           return;
         }
-        if (slots.length >= 2) slots.shift();
-        slots.push(ing.id);
+        const free = slots.indexOf(null);
+        slots[free >= 0 ? free : 2] = ing.id;
         PS.Audio.play(G, 'tap');
         this.rebuild(G);
-      });
+      }, 'ing:' + ing.id);
     });
-    y += Math.ceil(ings.length / cols) * ch + 6;
+    y += Math.ceil(ings.length / cols) * ch + 4;
     // Recipe book (rows with waiting orders first)
-    this.text(G, 'Recipe book — tap to fill', area.x, y, area.w, 26, COLORS.ink, 'left', P.items, 'UI', 16);
-    y += 34;
+    this.text(G, 'Recipe book — tap to fill', area.x, y, area.w, 24, COLORS.ink, 'left', P.items, 'UI', 16);
+    y += 30;
     const pend = PS.World.pendingOrders(G).concat(G.customers.filter((cc) => cc.state === 'waitingOrder'));
     const recipes = PS.Brewing.knownRecipes(G)
       .map((r) => ({ r, n: pend.filter((cc) => cc.recipe.id === r.id).length }))
       .sort((a, b) => b.n - a.n);
-    const rh = 64;
+    const rh = 60;
     const room = Math.max(1, Math.floor((area.y + area.h - y) / rh));
     recipes.slice(0, room).forEach(({ r, n }, k) => {
       const yy = y + k * rh;
       const ok = PS.Brewing.canBrew(G, r);
       this.panelBox(G, 'PanelParchment', area.x, yy, area.w, rh - 6, P.items, 16);
-      this.icon(G, r.icon, area.x + 32, yy + 29, 48, P.items, 'UI', 17);
-      this.text(G, r.name, area.x + 62, yy + 14, 220, 26, COLORS.ink, 'left', P.items, 'UI', 17);
+      this.icon(G, r.icon, area.x + 30, yy + 27, 44, P.items, 'UI', 17);
+      this.text(G, r.name, area.x + 58, yy + 13, 240, 24, COLORS.ink, 'left', P.items, 'UI', 17);
       r.ingredients.forEach((id, j) => {
         const ing = PS.data.ingredientById[id];
-        this.icon(G, ing.icon, area.x + 300 + j * 52, yy + 29, 40, P.items, 'UI', 17);
-        if ((inv[id] || 0) <= 0) this.icon(G, 'icon_close', area.x + 316 + j * 52, yy + 44, 18, P.items, 'UI', 18);
+        this.icon(G, ing.icon, area.x + 300 + j * 46, yy + 27, 36, P.items, 'UI', 17);
+        if ((inv[id] || 0) <= 0) this.icon(G, 'icon_close', area.x + 314 + j * 46, yy + 40, 16, P.items, 'UI', 18);
       });
+      // Bonus herb once discovered, otherwise a hint that one exists.
+      const found = G.state.discovered.includes(r.id);
+      this.text(G, '+', area.x + 384, yy + 12, 20, 26, COLORS.muted, 'center', P.items, 'UI', 17);
+      if (found) this.icon(G, PS.data.ingredientById[r.bonus].icon, area.x + 420, yy + 27, 34, P.items, 'UI', 17);
+      else this.text(G, '?', area.x + 404, yy + 12, 32, 26, COLORS.muted, 'center', P.items, 'UI', 17);
       if (n > 0) {
-        this.panelBox(G, 'BtnRed', area.x + area.w - 118, yy + 10, 108, 38, P.items, 17);
-        this.text(G, n + ' wanted', area.x + area.w - 118, yy + 16, 108, 22, '255;255;255', 'center', P.items, 'UI', 18);
+        this.panelBox(G, 'BtnRed', area.x + area.w - 110, yy + 9, 100, 36, P.items, 17);
+        this.text(G, n + ' wanted', area.x + area.w - 110, yy + 15, 100, 20, '255;255;255', 'center', P.items, 'UI', 18);
       }
       this.hit(P.hits, area.x, yy, area.w, rh - 6, () => {
         if (!ok) this.toast(G, 'Missing ingredients for ' + r.name);
-        P.params.slots = r.ingredients.slice();
+        P.params.slots = PS.Brewing.bestIngredients(G, r);
         this.rebuild(G);
-      });
+      }, 'recipe:' + r.id);
     });
   },
 
@@ -481,7 +500,7 @@ PS.UI = {
           size: 26,
           disabled: !idle || !can,
           onTap: () => {
-            if (PS.Brewing.request(G, idle, r.ingredients)) this.rebuild(G);
+            if (PS.Brewing.request(G, idle, PS.Brewing.bestIngredients(G, r))) this.rebuild(G);
           },
           onDisabled: () => this.toast(G, !idle ? 'All cauldrons are busy' : 'Missing ingredients'),
         });
@@ -494,15 +513,32 @@ PS.UI = {
   buildIngredients(G, P) {
     const area = this.frame(G, P, 'Herb shop', 1000);
     const inv = G.state.inventory;
+    // Entrance to the herb garden (optional free herbs).
+    const gardenOpen = G.state.level >= PS.data.balance.gardenLevel;
+    this.button(G, P, area.x, area.y - 6, area.w, 64, gardenOpen ? 'BtnGreen' : 'BtnGray',
+      gardenOpen ? 'Visit the Herb Garden' : 'Herb Garden opens at shop level ' + PS.data.balance.gardenLevel, {
+        tag: 'garden',
+        icon: 'icon_garden',
+        size: 26,
+        disabled: !gardenOpen,
+        onTap: () => G.goToGarden(),
+        onDisabled: () => this.toast(G, 'Reach shop level ' + PS.data.balance.gardenLevel + ' to open the garden'),
+      });
+    area.y += 70;
+    area.h -= 70;
     const rows = PS.data.ingredients.map((ing) => (x, y, w, h) => {
       const locked = ing.unlockLevel > G.state.level;
+      const n0 = inv[ing.id] || 0;
       this.panelBox(G, locked ? 'BtnGray' : 'PanelParchment', x, y, w, h, P.items, 16);
       this.icon(G, ing.icon, x + 46, y + h / 2, 70, P.items, 'UI', 17);
       this.text(G, ing.name, x + 92, y + 12, 240, 28, COLORS.ink, 'left', P.items, 'UI', 17);
       if (locked) {
         this.icon(G, 'icon_lock', x + w - 60, y + h / 2, 44, P.items, 'UI', 17);
-        this.text(G, 'Unlocks at shop level ' + ing.unlockLevel, x + 92, y + 52, 330, 22, COLORS.muted, 'left',
-          P.items, 'UI', 17);
+        this.text(G, ing.rare ? 'Rare: found in the Garden. Sold from shop level ' + ing.unlockLevel
+          : 'Unlocks at shop level ' + ing.unlockLevel, x + 92, y + 46, w - 170, 20, COLORS.muted, 'left', P.items, 'UI', 17);
+        if (ing.rare && n0 > 0) {
+          this.text(G, 'In stock: ' + n0, x + 92, y + 72, 200, 20, COLORS.green, 'left', P.items, 'UI', 17);
+        }
         return;
       }
       const n = inv[ing.id] || 0;
@@ -889,7 +925,8 @@ PS.UI = {
     const bubble = this.ensure(G, c.ui, 'bubble', 'SpeechBubble', 1);
     const icon = this.ensure(G, c.ui, 'icon', 'Icon', 2);
     const glow = this.ensure(G, c.ui, 'glow', 'Glow', 0);
-    const show = done || c.state === 'reserved';
+    const dirty = c.state === 'dirty';
+    const show = done || dirty || c.state === 'reserved';
     bubble.hide(!show || !p);
     icon.hide(!show || !p);
     glow.hide(!done || !p);
@@ -900,7 +937,7 @@ PS.UI = {
       bubble.setWidth(bw);
       bubble.setHeight(bh);
       bubble.setPosition(p[0] - bw / 2, p[1] - bh);
-      icon.setAnimationName(done ? c.recipe.icon : 'icon_hourglass');
+      icon.setAnimationName(done ? c.recipe.icon : dirty ? 'icon_broom' : 'icon_hourglass');
       icon.setWidth(46 * s);
       icon.setHeight(46 * s);
       icon.setPosition(p[0] - 23 * s, p[1] - bh + 8 * s);
@@ -908,6 +945,18 @@ PS.UI = {
       glow.setHeight(130);
       glow.setPosition(p[0] - 65, p[1] - bh / 2 - 65);
       glow.setOpacity(120 + 60 * Math.sin(G.time * 4));
+    }
+    // Quality stars under a finished potion (none for Poor).
+    for (let i = 0; i < 3; i++) {
+      const st = this.ensure(G, c.ui, 'star' + i, 'Icon', 3);
+      const on = done && p && c.quality >= 2 && i < c.quality;
+      st.hide(!on);
+      if (on) {
+        st.setAnimationName('icon_star');
+        st.setWidth(20);
+        st.setHeight(20);
+        st.setPosition(p[0] - 10 + (i - (c.quality - 1) / 2) * 20, p[1] - 6);
+      }
     }
     // Plan badge
     const plan = PS.Workers.planIndex(G, c);
@@ -1100,16 +1149,8 @@ PS.UI = {
     PS.Input.worldTap(G, x, y);
   },
 
-  // ------------------------------------------------------------ frame
-  update(G, dt) {
-    this.handleInput(G);
-    this.updateHud(G);
-    for (const c of G.customers) this.updateCustomerOverlay(G, c);
-    for (const c of G.cauldrons) if (c.unlocked) this.updateCauldronOverlay(G, c);
-    for (const w of G.workers) this.updateWorkerOverlay(G, w);
-    this.updateCounterOverlay(G);
-    for (const st of G.seats) this.updateSlotOverlay(G, st, 'extra_table');
-    for (const c of G.cauldrons) this.updateSlotOverlay(G, c, 'extra_cauldron');
+  // Floating texts and the toast message (also used by the garden scene).
+  updateTransient(G, dt) {
     // Floating texts
     for (let i = G.ui.floats.length - 1; i >= 0; i--) {
       const f = G.ui.floats[i];
@@ -1131,6 +1172,19 @@ PS.UI = {
         G.ui.toast = null;
       }
     }
+  },
+
+  // ------------------------------------------------------------ frame
+  update(G, dt) {
+    this.handleInput(G);
+    this.updateHud(G);
+    for (const c of G.customers) this.updateCustomerOverlay(G, c);
+    for (const c of G.cauldrons) if (c.unlocked) this.updateCauldronOverlay(G, c);
+    for (const w of G.workers) this.updateWorkerOverlay(G, w);
+    this.updateCounterOverlay(G);
+    for (const st of G.seats) this.updateSlotOverlay(G, st, 'extra_table');
+    for (const c of G.cauldrons) this.updateSlotOverlay(G, c, 'extra_cauldron');
+    this.updateTransient(G, dt);
     // Live panels refresh a few times per second (timers, patience bars).
     G.ui.refreshTimer -= dt;
     const live = G.ui.panel && (G.ui.panel.name === 'orders' || G.ui.panel.name === 'workers' || G.ui.dirty);
@@ -1166,6 +1220,7 @@ PS.Input = {
       if (c.unlocked) {
         consider(c.x, c.y, 45, 'cauldron', c);
         consider(c.x, c.y, 120, 'cauldron', c);
+        if (c.spill) consider(c.x, c.y + 50, 2, 'cauldron', c, 10);
       } else if (c.sign) consider(c.x, c.y, 30, 'slot', 'cauldron');
     }
     for (const s of G.seats) if (s.sign) consider(s.obj.getX(), s.obj.getY(), 30, 'slot', 'table');
@@ -1194,7 +1249,7 @@ PS.Input = {
       const brewing = G.cauldrons.find((k) => (k.state === 'brewing' || k.state === 'reserved') && k.recipe.id === c.recipe.id);
       if (brewing) return PS.UI.toast(G, c.recipe.name + ' is brewing...');
       const idle = PS.Brewing.idleCauldron(G);
-      if (idle) PS.UI.open(G, 'brew', { cauldron: idle, slots: c.recipe.ingredients.slice() });
+      if (idle) PS.UI.open(G, 'brew', { cauldron: idle, slots: PS.Brewing.bestIngredients(G, c.recipe) });
       else PS.UI.toast(G, 'Wants a ' + c.recipe.name + ' — all cauldrons are busy');
     } else {
       PS.UI.toast(G, 'Waiting for a free table');
@@ -1206,9 +1261,11 @@ PS.Input = {
       // Pre-fill with the oldest order that is not covered yet.
       const orders = PS.World.pendingOrders(G);
       const want = orders.find((o) => PS.Brewing.plannedFor(G, o.recipe.id) < orders.filter((x) => x.recipe.id === o.recipe.id).length);
-      PS.UI.open(G, 'brew', { cauldron: c, slots: want ? want.recipe.ingredients.slice() : [] });
+      PS.UI.open(G, 'brew', { cauldron: c, slots: want ? PS.Brewing.bestIngredients(G, want.recipe) : [] });
     } else if (c.state === 'done') {
       PS.Workers.enqueue(G, { type: 'collect', target: c });
+    } else if (c.state === 'dirty') {
+      PS.Workers.enqueue(G, { type: 'clean', target: c });
     } else if (c.state === 'brewing') {
       PS.UI.toast(G, c.recipe.name + ' ready in ' + U.formatTime(c.dur - c.t));
     } else {

@@ -478,6 +478,116 @@ def build_bubble():
     return m
 
 
+# ------------------------------------------------------------------ garden
+def build_garden():
+    """The herb garden scene: lawn, low stone wall, path, pond with a well, trees."""
+    m = Model("garden")
+    W, D = 640, 880
+    m.box(-700, -500, -14, W + 1400, D + 1200, 12, {"top": "rep:grass", "side": "dirt"}, rep_scale=128, faces=["top"])
+    # Low stone wall around the garden with wooden caps
+    for (x, y, w, d) in ((-30, -30, W + 60, 24), (-30, -30, 24, D + 60), (W + 6, -30, 24, D + 60),
+                         (-30, D + 6, 290, 24), (380, D + 6, 290, 24)):
+        m.box(x, y, -2, w, d, 28, {"all": "rep:stone_wall", "top": "wood"}, rep_scale=96,
+              faces=["north", "south", "east", "west", "top"])
+        m.box(x - 1, y - 1, 26, w + 2, d + 2, 5, {"all": "beam", "top": "wood"})
+    # Gate posts back to the shop
+    for x in (250, 380):
+        m.box(x - 8, D, -2, 16, 30, 70, {"all": "beam_v", "top": "wood_dark"})
+        m.box(x - 6, D + 6, 68, 12, 12, 12, {"all": "flame"}, unlit=True, ao=False)
+    m.box(242, D + 2, 70, 154, 14, 10, {"all": "beam", "top": "wood"})
+    # Stone path down the middle
+    m.box(280, 260, -2.4, 80, D - 230, 1, {"top": "rep:cobble"}, rep_scale=96, faces=["top"])
+    # Pond with a stone rim and a well (Moonwater)
+    m.box(150, 90, -2.5, 340, 150, 1, {"top": "liquid:5aa0e0"}, unlit=True, faces=["top"], ao=False)
+    for (x, y, w, d) in ((140, 80, 360, 12), (140, 238, 360, 12), (140, 80, 12, 170), (488, 80, 12, 170)):
+        m.box(x, y, -2, w, d, 8, {"all": "stone_big", "top": "stone"})
+    for (x, y) in ((200, 130), (420, 190), (260, 200)):
+        m.box(x - 12, y - 8, -1, 24, 16, 2, {"top": "leaves:3f8a3a"}, faces=["top", "north", "south"])
+    m.box(300, 120, -2, 40, 40, 26, {"all": "stone_big", "top": "metal_plain:3a3d44"})
+    for x in (302, 334):
+        m.box(x, 132, 24, 4, 4, 34, {"all": "beam_v"})
+    m.box(300, 130, 56, 40, 8, 4, {"all": "beam"})
+    m.box(296, 126, 60, 48, 16, 6, {"all": "wood_red", "top": "wood_red"})
+    m.box(316, 134, 34, 8, 8, 10, {"all": "barrel"})
+    # Trees and shrubs around the edges
+    for (x, y, sz) in ((40, 60, 70), (600, 60, 64), (30, 820, 60), (610, 820, 66), (-120, 300, 90), (760, 420, 90),
+                       (-140, 700, 80), (780, 760, 84)):
+        m.box(x - 8, y - 8, -2, 16, 16, 60, {"all": "wood_v_dark", "top": "wood_dark"})
+        for (dx, dy, dz, s2) in ((0, 0, 50, sz), (-10, 8, 80, sz * 0.75), (8, -6, 100, sz * 0.55)):
+            m.box(x + dx - s2 / 2, y + dy - s2 / 2, dz, s2, s2, s2 * 0.6, {"all": "leaves:3f7a32", "top": "leaves:4f8a3a"})
+    # Flower borders along the side walls
+    for y in range(280, 820, 60):
+        for x in (14, 612):
+            m.box(x - 10, y - 10, -2, 20, 20, 10, {"all": "leaves:4a8a3a", "top": "herb:5a9a42:" + ["e04a6a", "f0d040", "c060e0"][(y // 60) % 3]})
+    # Garden shed and tools
+    m.box(520, 270, -2, 90, 70, 60, {"south": "wood_v", "all": "wood_v_dark"})
+    m.box(512, 262, 58, 106, 86, 8, {"all": "wood_red", "top": "wood_red"})
+    m.box(552, 340, -2, 26, 1, 44, {"south": "wood_dark"}, faces=["south"])
+    m.box(500, 330, -2, 8, 8, 50, {"all": "wood_light"}, rot=(0, -12, 0), pivot=(504, 334, -2))
+    m.cyl(80, 300, -2, 14, 30, {"side": "barrel", "top": "liquid:5aa0e0"}, segments=10)
+    # Lanterns on posts
+    for (x, y) in ((250, 300), (390, 300), (250, 780), (390, 780)):
+        m.box(x - 3, y - 3, -2, 6, 6, 50, {"all": "metal_plain"})
+        m.box(x - 6, y - 6, 48, 12, 12, 14, {"all": "metal"})
+        m.box(x - 4, y - 4, 50, 8, 8, 10, {"all": "flame"}, unlit=True, ao=False)
+    return m
+
+
+def build_plot():
+    m = Model("plot")
+    m.box(-44, -44, -2, 88, 88, 7, {"top": "dirt", "side": "dirt"})
+    for (x, y, w, d) in ((-48, -48, 96, 8), (-48, 40, 96, 8), (-48, -40, 8, 80), (40, -40, 8, 80)):
+        m.box(x, y, -2, w, d, 10, {"all": "wood", "top": "wood_light"})
+    for (x, y) in ((-20, -18), (12, 20), (22, -26)):
+        m.box(x, y, 5, 5, 4, 2, {"all": "stone"})
+    return m
+
+
+def plant_model(name, kind):
+    m = Model(name)
+    if kind == "redleaf":
+        for (dx, dy, h) in ((-8, -6, 22), (8, -4, 26), (0, 8, 20), (-10, 8, 16), (10, 10, 18)):
+            m.box(dx - 1, dy - 1, 0, 2, 2, h - 6, {"all": "solid:4a7a2a"})
+            m.box(dx - 6, dy - 2, h - 8, 12, 4, 10, {"all": "herb:c0302a", "top": "herb:d0342c"}, rot=(0, (dx % 3) * 8, dx * 3))
+    elif kind == "sunroot":
+        for (dx, dy) in ((-10, -6), (8, -8), (0, 8)):
+            m.box(dx - 5, dy - 5, 0, 10, 10, 6, {"all": "solid:f29a2e", "top": "solid:f0b050"})
+            for k in (-3, 0, 3):
+                m.box(dx + k - 1, dy - 1, 6, 2, 2, 16 + k, {"all": "leaves:5fb04a"})
+    elif kind == "sparkdust":
+        for (dx, dy, h) in ((0, 0, 26), (-10, 6, 16), (10, 4, 18), (4, -10, 14)):
+            m.box(dx - 3, dy - 3, 0, 6, 6, h, {"all": "gem:ffe45c"}, unlit=True)
+        m.box(-14, -14, 0, 28, 28, 3, {"all": "solid:c8a050"})
+    elif kind == "bluecap":
+        for (dx, dy, h, r) in ((0, 0, 18, 12), (-12, 8, 10, 8), (12, 6, 12, 8)):
+            m.box(dx - 2.5, dy - 2.5, 0, 5, 5, h, {"all": "solid:efe6d0"})
+            m.box(dx - r, dy - r, h, r * 2, r * 2, r * 0.7, {"all": "solid:3a6fe0", "top": "herb:3a6fe0:ffffff"})
+    elif kind == "ironroot":
+        m.box(-4, -4, 0, 8, 8, 24, {"all": "wood_v_dark"}, rot=(8, 6, 0), pivot=(0, 0, 0))
+        m.box(-12, -3, 0, 12, 5, 6, {"all": "wood_v_dark"}, rot=(0, -20, 0), pivot=(0, 0, 0))
+        m.box(2, -3, 0, 12, 5, 7, {"all": "wood_v_dark"}, rot=(0, 25, 0), pivot=(0, 0, 0))
+        m.box(-3, -3, 20, 6, 6, 4, {"all": "metal_plain:a0a8b8"})
+    elif kind == "swiftmint":
+        for (dx, dy, h) in ((-8, 0, 26), (6, -6, 30), (4, 8, 22), (-6, -10, 20)):
+            m.box(dx - 1, dy - 1, 0, 2, 2, h, {"all": "solid:2f7a4a"})
+            for z in range(8, h, 7):
+                m.box(dx - 6, dy - 2, z, 12, 4, 4, {"all": "leaves:4fd18a"})
+    elif kind == "starbloom":
+        m.box(-1.5, -1.5, 0, 3, 3, 26, {"all": "solid:2f7a4a"})
+        m.box(-8, -2, 8, 8, 4, 3, {"all": "leaves:4fa060"})
+        for (dx, dz, w, h) in ((0, 34, 22, 8), (0, 30, 8, 16), (-7, 30, 6, 6), (7, 30, 6, 6)):
+            m.box(dx - w / 2, -2, dz - h / 2 + 2, w, 4, h, {"all": "gem:ffd640"}, unlit=True)
+        m.box(-3, -3, 31, 6, 6, 6, {"all": "solid:fffae0"}, unlit=True)
+    elif kind == "glowcap":
+        for (dx, dy, h, r) in ((0, 0, 20, 12), (-11, 8, 10, 7)):
+            m.box(dx - 2.5, dy - 2.5, 0, 5, 5, h, {"all": "solid:dcfaf5"}, unlit=True)
+            m.box(dx - r, dy - r, h, r * 2, r * 2, r * 0.7, {"all": "gem:3cdcd2"}, unlit=True)
+    return m
+
+
+PLANTS = ["redleaf", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom", "glowcap"]
+
+
 BUILDERS = {
     "room": build_room,
     "exterior": build_exterior,
@@ -492,4 +602,8 @@ BUILDERS = {
     "plant": build_plant,
     "candelabra": build_candelabra,
     "slot_sign": build_slot_table,
+    "garden": build_garden,
+    "plot": build_plot,
 }
+for _k in PLANTS:
+    BUILDERS["plant_" + _k] = (lambda k=_k: plant_model("plant_" + k, k))

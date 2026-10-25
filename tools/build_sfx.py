@@ -62,6 +62,13 @@ def main():
     n = int(SR * 0.4)
     write("sfx_angry.wav", tone(180, 0.4, "square", 0.3, slide=-0.4) * env(n, release=0.2))
     write("sfx_buy.wav", seq(tone(660, 0.06, "tri", 0.4) * env(int(SR * 0.06)), tone(880, 0.12, "tri", 0.4) * env(int(SR * 0.12))))
+    n = int(SR * 0.6)
+    boom = np.convolve(tone(0, 0.6, "noise", 0.8), np.ones(60) / 60, mode="same") * 6 * env(n, 0.002, 0.55)
+    write("sfx_boom.wav", np.clip(boom + tone(90, 0.6, "sine", 0.6, slide=-0.6) * env(n, 0.002, 0.5), -1, 1))
+    n = int(SR * 0.3)
+    sweep = np.convolve(tone(0, 0.3, "noise", 0.5), np.ones(8) / 8, mode="same") * env(n, 0.05, 0.15)
+    write("sfx_sweep.wav", sweep)
+    write("sfx_pluck.wav", seq(tone(880, 0.05, "tri", 0.4) * env(int(SR * 0.05)), tone(1320, 0.1, "tri", 0.35) * env(int(SR * 0.1))))
     notes = [523, 659, 784, 1047, 784, 1047]
     write("sfx_levelup.wav", seq(*[tone(f, 0.11, "square", 0.22) * env(int(SR * 0.11), release=0.08) for f in notes]))
 
