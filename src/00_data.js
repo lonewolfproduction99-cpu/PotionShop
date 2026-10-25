@@ -47,6 +47,14 @@ PS.loadData = function (runtimeScene) {
     maxLevel: Number(u.MaxLevel) || 5,
     effect: Number(u.Effect) || 0,
     minShopLevel: Number(u.MinShopLevel) || 1,
+    persistent: !!u.Persistent, // kept when the shop is prestiged
+  }));
+  const workerTypes = (read('WorkerTypes') || []).map((w) => ({
+    id: String(w.Id),
+    object: String(w.Object),
+    name: String(w.Name),
+    hireCost: Number(w.HireCost) || 150,
+    minShopLevel: Number(w.MinShopLevel) || 1,
   }));
   const b = read('Balance') || {};
   const balance = {
@@ -65,6 +73,9 @@ PS.loadData = function (runtimeScene) {
     deliverTime: Number(b.DeliverTime) || 0.7,
     tipMax: Number(b.TipMax) || 0.5,
     sludgePrice: Number(b.SludgePrice) || 0,
+    apprenticeSlowness: Number(b.ApprenticeSlowness) || 1.15, // apprentices start a bit slower than the owner
+    workerUpgradeBase: Number(b.WorkerUpgradeBase) || 50,
+    workerUpgradeGrowth: Number(b.WorkerUpgradeGrowth) || 1.65,
   };
 
   PS.data = {
@@ -75,6 +86,7 @@ PS.loadData = function (runtimeScene) {
     customers,
     upgrades,
     upgradeById: Object.fromEntries(upgrades.map((u) => [u.id, u])),
+    workerTypes,
     balance,
   };
   return PS.data;

@@ -43,6 +43,12 @@ gdjs.ShopCode.GDCustMageObjects1= [];
 gdjs.ShopCode.GDCustMageObjects2= [];
 gdjs.ShopCode.GDCustRogueObjects1= [];
 gdjs.ShopCode.GDCustRogueObjects2= [];
+gdjs.ShopCode.GDApprenticePipObjects1= [];
+gdjs.ShopCode.GDApprenticePipObjects2= [];
+gdjs.ShopCode.GDApprenticeMapleObjects1= [];
+gdjs.ShopCode.GDApprenticeMapleObjects2= [];
+gdjs.ShopCode.GDApprenticeBrambleObjects1= [];
+gdjs.ShopCode.GDApprenticeBrambleObjects2= [];
 gdjs.ShopCode.GDLiquidObjects1= [];
 gdjs.ShopCode.GDLiquidObjects2= [];
 gdjs.ShopCode.GDBubbleObjects1= [];
@@ -87,7 +93,7 @@ gdjs.ShopCode.GDUiTextObjects1= [];
 gdjs.ShopCode.GDUiTextObjects2= [];
 
 
-gdjs.ShopCode.userFunc0x8bacd0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x977090 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game data =====
 // Recipes, ingredients, customer types and upgrades are stored in the
@@ -138,6 +144,14 @@ PS.loadData = function (runtimeScene) {
     maxLevel: Number(u.MaxLevel) || 5,
     effect: Number(u.Effect) || 0,
     minShopLevel: Number(u.MinShopLevel) || 1,
+    persistent: !!u.Persistent, // kept when the shop is prestiged
+  }));
+  const workerTypes = (read('WorkerTypes') || []).map((w) => ({
+    id: String(w.Id),
+    object: String(w.Object),
+    name: String(w.Name),
+    hireCost: Number(w.HireCost) || 150,
+    minShopLevel: Number(w.MinShopLevel) || 1,
   }));
   const b = read('Balance') || {};
   const balance = {
@@ -156,6 +170,9 @@ PS.loadData = function (runtimeScene) {
     deliverTime: Number(b.DeliverTime) || 0.7,
     tipMax: Number(b.TipMax) || 0.5,
     sludgePrice: Number(b.SludgePrice) || 0,
+    apprenticeSlowness: Number(b.ApprenticeSlowness) || 1.15, // apprentices start a bit slower than the owner
+    workerUpgradeBase: Number(b.WorkerUpgradeBase) || 50,
+    workerUpgradeGrowth: Number(b.WorkerUpgradeGrowth) || 1.65,
   };
 
   PS.data = {
@@ -166,6 +183,7 @@ PS.loadData = function (runtimeScene) {
     customers,
     upgrades,
     upgradeById: Object.fromEntries(upgrades.map((u) => [u.id, u])),
+    workerTypes,
     balance,
   };
   return PS.data;
@@ -186,7 +204,7 @@ PS.xpForLevel = function (level) {
 };
 
 };
-gdjs.ShopCode.userFunc0x96f210 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8e7d38 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: utilities =====
 // Math helpers, object helpers and the 3D -> screen projection used to place
@@ -299,7 +317,7 @@ PS.setupCamera = function (runtimeScene) {
 };
 
 };
-gdjs.ShopCode.userFunc0x96f2d8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8e7dc8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: navigation =====
 // Characters walk on a grid built once at scene start. Blocked cells come from
@@ -515,18 +533,26 @@ PS.goTo = function (ch, x, y) {
 };
 
 };
-gdjs.ShopCode.userFunc0x96f3a0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8e7e90 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
 // available in mobile exports) under the "PotionShop" storage name.
 // Loading validates every field and falls back to defaults on bad data.
+//
+// The save has two parts:
+//   meta: kept forever (shop level, XP, lifetime stats, prestige, gems),
+//   run:  progress of the current shop, reset when the shop is prestiged
+//         (gold, herbs, upgrades, stored potions, hired workers).
+// In memory the game uses one flat object; the split happens when saving.
 const PS = gdjs.PotionShop;
 
 PS.Save = {
   STORAGE: 'PotionShop',
   KEY: 'save',
-  VERSION: 1,
+  VERSION: 2,
+  META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes'],
+  RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers'],
 
   defaults() {
     const d = PS.data;
@@ -547,6 +573,9 @@ PS.Save = {
       upgrades,
       stock: {},
       seenRecipes: [],
+      prestige: 0,
+      gems: 0,
+      workers: [], // hired apprentices: { type, role, stats: { speed, brew, service } }
     };
   },
 
@@ -576,7 +605,48 @@ PS.Save = {
       }
     }
     if (Array.isArray(raw.seenRecipes)) s.seenRecipes = raw.seenRecipes.filter((id) => PS.data.recipeById[id]);
+    s.prestige = Math.floor(num(raw.prestige, 0, 0, 999));
+    s.gems = Math.floor(num(raw.gems, 0, 0, 1e9));
+    if (Array.isArray(raw.workers)) {
+      const types = PS.data.workerTypes;
+      raw.workers.slice(0, types.length).forEach((w, i) => {
+        if (!w || typeof w !== 'object') return;
+        const st = w.stats || {};
+        s.workers.push({
+          type: types[i].id,
+          role: ['all', 'service', 'brew'].includes(w.role) ? w.role : 'all',
+          stats: {
+            speed: Math.floor(num(st.speed, 0, 0, 5)),
+            brew: Math.floor(num(st.brew, 0, 0, 5)),
+            service: Math.floor(num(st.service, 0, 0, 5)),
+          },
+        });
+      });
+    }
     return s;
+  },
+
+  // Stored format: { v: 2, meta: {...}, run: {...} }. Version 1 saves were flat.
+  pack(state) {
+    const meta = {};
+    const run = {};
+    for (const k of this.META_KEYS) meta[k] = state[k];
+    for (const k of this.RUN_KEYS) run[k] = state[k];
+    return { v: this.VERSION, meta, run };
+  },
+  unpack(raw) {
+    if (raw && raw.v === 2 && raw.meta && raw.run) return Object.assign({}, raw.run, raw.meta);
+    return raw; // version 1: already flat
+  },
+
+  // New shop after a prestige: meta progress and persistent upgrades are kept,
+  // everything else starts over.
+  prestigeReset(state) {
+    const fresh = this.defaults();
+    for (const k of this.META_KEYS) fresh[k] = JSON.parse(JSON.stringify(state[k]));
+    for (const u of PS.data.upgrades) if (u.persistent) fresh.upgrades[u.id] = state.upgrades[u.id] || 0;
+    fresh.prestige = (state.prestige || 0) + 1;
+    return fresh;
   },
 
   load() {
@@ -591,12 +661,12 @@ PS.Save = {
       console.warn('Potion Shop: save data is invalid, starting fresh.', e);
       raw = null;
     }
-    return this.validate(raw);
+    return this.validate(this.unpack(raw));
   },
 
   save(state) {
     try {
-      gdjs.evtTools.storage.writeStringInJSONFile(this.STORAGE, this.KEY, JSON.stringify(state));
+      gdjs.evtTools.storage.writeStringInJSONFile(this.STORAGE, this.KEY, JSON.stringify(this.pack(state)));
       return true;
     } catch (e) {
       console.warn('Potion Shop: could not save.', e);
@@ -614,7 +684,7 @@ PS.Save = {
 };
 
 };
-gdjs.ShopCode.userFunc0x96f4c0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8e7fb0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: shop world =====
 // Builds the shop from the scene instances (tables, cauldrons, waypoints),
@@ -628,6 +698,7 @@ PS.World = {
     // --- Waypoints placed on the hidden "Nav" layer.
     G.queueSpots = [];
     G.spawns = [];
+    const homes = [];
     for (const w of scene.getObjects('Waypoint')) {
       const kind = PS.varStr(w, 'Kind', '');
       const p = [w.getX(), w.getY()];
@@ -636,10 +707,12 @@ PS.World = {
       else if (kind === 'home') G.home = p;
       else if (kind === 'spawn') G.spawns.push(p);
       else if (kind === 'queue') G.queueSpots.push({ order: PS.varNum(w, 'Order', 0), p });
+      else if (kind === 'workerHome') homes.push({ order: PS.varNum(w, 'Order', 0), p });
     }
     G.queueSpots.sort((a, b) => a.order - b.order);
     G.queueSpots = G.queueSpots.map((q) => q.p).slice(0, PS.data.balance.queueSize + 1);
     G.queue = [];
+    G.workerHomes = homes.sort((a, b) => a.order - b.order).map((h) => h.p);
 
     // --- Tables (each TableSet has one chair = one seat).
     G.seats = scene
@@ -1016,13 +1089,16 @@ PS.FX = {
 };
 
 };
-gdjs.ShopCode.userFunc0x96f598 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x98dab8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: workers and task queue =====
-// The shop owner (and later hired workers) performs one physical task at a
-// time. Taps add tasks to a queue so nothing is lost while the owner is busy.
+// Every worker performs one physical task at a time.
+// - The shop owner follows the player's taps: taps add tasks to the owner's
+//   queue so nothing is lost while the owner is busy.
+// - Hired apprentices pick their own jobs (collect potions, deliver, take
+//   orders, brew for orders nobody is brewing yet), limited by their role.
 // Exclusive targets (a customer's order, a cauldron, a delivery) are claimed
-// so two tasks can never work on the same thing.
+// so two workers can never work on the same thing.
 const PS = gdjs.PotionShop;
 const U = PS.util;
 
@@ -1043,6 +1119,8 @@ PS.Workers = {
     const obj = PS.create(G.scene, 'Owner', hx, hy, '');
     const w = {
       id: 'owner',
+      index: 0,
+      isOwner: true,
       obj,
       speed: PS.data.balance.ownerSpeed,
       task: null,
@@ -1057,6 +1135,107 @@ PS.Workers = {
     G.workers = [w];
     G.owner = w;
     return w;
+  },
+
+  // Apprentice `index` (1-based) using its saved record in G.state.workers.
+  createApprentice(G, index, record) {
+    const type = PS.data.workerTypes[index - 1];
+    const home = G.workerHomes[index - 1] || G.home;
+    const obj = PS.create(G.scene, type.object, home[0], home[1], '');
+    const w = {
+      id: type.id,
+      index,
+      isOwner: false,
+      name: type.name,
+      record, // saved data: role and stats
+      obj,
+      home,
+      speed: PS.data.balance.ownerSpeed,
+      task: null,
+      queue: [],
+      carrying: null,
+      anim: '',
+      path: null,
+      idleAnim: 'Idle',
+      thinkTimer: Math.random() * 0.3,
+    };
+    PS.faceInstantly(w, 0, 1);
+    PS.setAnim(w, 'Idle');
+    G.workers.push(w);
+    return w;
+  },
+
+  // Worker currently working on (or heading to) a target, if any.
+  claimedBy(G, target) {
+    for (const w of G.workers) {
+      if (w.task && w.task.target === target) return w;
+      if (w.queue.some((t) => t.target === target)) return w;
+    }
+    return null;
+  },
+
+  statMult(w, stat) {
+    if (w.isOwner) return 1;
+    return 1 + 0.15 * (w.record.stats[stat] || 0);
+  },
+
+  // ----- Apprentice brain: choose the most useful job allowed by the role.
+  think(G, w) {
+    const role = w.record.role;
+    const service = role === 'all' || role === 'service';
+    const brew = role === 'all' || role === 'brew';
+    const free = (type, target) => !this.isQueued(G, type, target);
+    const d = (x, y) => U.dist(w.obj.getX(), w.obj.getY(), x, y);
+    const options = [];
+    if (brew) {
+      for (const c of G.cauldrons) {
+        if (c.unlocked && c.state === 'done' && free('collect', c)) options.push({ p: 0, dist: d(c.x, c.y), task: { type: 'collect', target: c } });
+      }
+    }
+    if (service) {
+      for (const c of PS.World.pendingOrders(G)) {
+        if (!c.deliveryReserved && (G.state.stock[c.recipe.id] || 0) > 0 && free('fetchStock', c)) {
+          options.push({ p: 1, dist: d(G.counter.x, G.counter.y), task: { type: 'fetchStock', target: c } });
+        }
+      }
+      for (const c of G.customers) {
+        if (c.state === 'waitingOrder' && free('takeOrder', c)) {
+          // Most impatient customers first.
+          options.push({ p: 2 + c.patience / c.maxPatience, dist: d(c.obj.getX(), c.obj.getY()), task: { type: 'takeOrder', target: c } });
+        }
+      }
+    }
+    if (brew) {
+      const job = this.brewJob(G, w);
+      if (job) options.push({ p: 3, dist: d(job.cauldron.x, job.cauldron.y), task: null, job });
+    }
+    if (!options.length) return;
+    options.sort((a, b) => a.p - b.p || a.dist - b.dist);
+    const best = options[0];
+    if (best.job) {
+      if (!PS.Brewing.reserve(G, best.job.cauldron, best.job.recipe.ingredients)) return;
+      this.begin(G, w, { type: 'startBrew', target: best.job.cauldron });
+    } else {
+      this.begin(G, w, best.task);
+    }
+  },
+
+  // The oldest order (or seated customer) whose potion nobody is making yet,
+  // and the nearest idle cauldron to brew it in.
+  brewJob(G, w) {
+    const cauldrons = G.cauldrons.filter((c) => c.unlocked && c.state === 'idle');
+    if (!cauldrons.length) return null;
+    const demand = PS.World.pendingOrders(G).concat(G.customers.filter((c) => c.state === 'waitingOrder'));
+    const counted = {};
+    for (const c of demand) {
+      const id = c.recipe.id;
+      counted[id] = (counted[id] || 0) + 1;
+      if (PS.Brewing.plannedFor(G, id) < counted[id] && PS.Brewing.canBrew(G, c.recipe)) {
+        cauldrons.sort((a, b) => U.dist(w.obj.getX(), w.obj.getY(), a.x, a.y) - U.dist(w.obj.getX(), w.obj.getY(), b.x, b.y));
+        return { cauldron: cauldrons[0], recipe: c.recipe };
+      }
+    }
+    return null;
   },
 
   // Is a task with this type/target already queued or running?
@@ -1110,8 +1289,9 @@ PS.Workers = {
   },
 
   // Where the worker stands to perform a task, and which way it faces.
-  taskSpot(G, task) {
+  taskSpot(G, task, w) {
     const t = task.target;
+    const offset = w && !w.isOwner ? (w.index % 2 ? 1 : -1) * 18 * Math.ceil(w.index / 2) : 0;
     switch (task.type) {
       case 'takeOrder':
       case 'deliver':
@@ -1122,7 +1302,7 @@ PS.Workers = {
         return { x: t.standX, y: t.standY, fx: 0, fy: -1 };
       case 'fetchStock':
       case 'store':
-        return { x: G.counter.standX, y: G.counter.standY, fx: 0, fy: 1 };
+        return { x: G.counter.standX + offset, y: G.counter.standY, fx: 0, fy: 1 };
     }
     return null;
   },
@@ -1147,7 +1327,7 @@ PS.Workers = {
     return false;
   },
 
-  actionTime(G, type) {
+  actionTime(G, type, w) {
     const b = PS.data.balance;
     const base = {
       takeOrder: b.takeOrderTime,
@@ -1157,7 +1337,9 @@ PS.Workers = {
       fetchStock: b.collectTime,
       store: b.collectTime * 0.6,
     }[type];
-    return base * G.mult('quick_hands', -1);
+    const stat = type === 'takeOrder' || type === 'deliver' ? 'service' : 'brew';
+    const apprentice = w && !w.isOwner ? PS.data.balance.apprenticeSlowness : 1;
+    return (base * apprentice * G.mult('quick_hands', -1)) / (w ? this.statMult(w, stat) : 1);
   },
 
   // Called when a customer leaves: drop tasks that targeted them.
@@ -1180,13 +1362,21 @@ PS.Workers = {
 
   update(G, dt) {
     for (const w of G.workers) {
-      w.speed = PS.data.balance.ownerSpeed * G.mult('swift_shoes', +1);
+      w.speed = (PS.data.balance.ownerSpeed * G.mult('swift_shoes', +1) * this.statMult(w, 'speed')) /
+        (w.isOwner ? 1 : PS.data.balance.apprenticeSlowness);
       if (!w.task) this.nextTask(G, w);
+      if (!w.task && !w.isOwner) {
+        w.thinkTimer -= dt;
+        if (w.thinkTimer <= 0) {
+          w.thinkTimer = 0.3;
+          this.think(G, w);
+        }
+      }
       const task = w.task;
       if (!task) {
-        // Idle: go back home behind the counter.
+        // Idle: go back to the worker's resting spot.
         if (!w.path || !w.path.length) {
-          const [hx, hy] = G.home;
+          const [hx, hy] = w.home || G.home;
           if (U.dist(w.obj.getX(), w.obj.getY(), hx, hy) > 6 && !w.goingHome) {
             w.goingHome = true;
             PS.goTo(w, hx, hy);
@@ -1221,7 +1411,7 @@ PS.Workers = {
         if (PS.walk(w, dt)) {
           task.phase = 'act';
           task.t = 0;
-          task.dur = this.actionTime(G, task.type);
+          task.dur = this.actionTime(G, task.type, w);
           PS.faceInstantly(w, task.spot.fx, task.spot.fy);
           PS.setAnim(w, 'Work');
           PS.Audio.play(G, task.type === 'startBrew' ? 'splash' : 'tap');
@@ -1251,7 +1441,7 @@ PS.Workers = {
   },
 
   begin(G, w, task) {
-    const spot = this.taskSpot(G, task);
+    const spot = this.taskSpot(G, task, w);
     if (!spot) {
       if (task.type === 'deliver') this.retargetDelivery(G, w, task);
       return;
@@ -1271,8 +1461,9 @@ PS.Workers = {
         t.patience = Math.min(t.maxPatience, t.patience + t.maxPatience * 0.15);
         PS.UI.floatText(G, t.obj.getX(), t.obj.getY(), 100, t.recipe.name, t.recipe.icon);
         // A matching potion is already waiting on the counter: bring it.
-        if ((G.state.stock[t.recipe.id] || 0) > 0) {
-          this.enqueue(G, { type: 'fetchStock', target: t }, true);
+        if ((G.state.stock[t.recipe.id] || 0) > 0 && !this.isQueued(G, 'fetchStock', t)) {
+          if (w.isOwner) this.enqueue(G, { type: 'fetchStock', target: t }, true);
+          else this.begin(G, w, { type: 'fetchStock', target: t });
         }
         PS.UI.markDirty(G);
         break;
@@ -1355,7 +1546,7 @@ PS.Workers = {
 };
 
 };
-gdjs.ShopCode.userFunc0x965008 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8e80e8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: brewing =====
 // Cauldron states: idle -> reserved (ingredients paid, owner on the way)
@@ -1388,7 +1579,18 @@ PS.Brewing = {
       }
     }
     if (!PS.Workers.enqueue(G, { type: 'startBrew', target: cauldron })) return false;
-    for (const id in need) inv[id] -= need[id];
+    this.reserve(G, cauldron, ingredientIds);
+    return true;
+  },
+
+  // Pay the ingredients and hold the cauldron until a worker adds them.
+  reserve(G, cauldron, ingredientIds) {
+    if (cauldron.state !== 'idle') return false;
+    const inv = G.state.inventory;
+    for (const id of ingredientIds) {
+      if ((inv[id] || 0) < ingredientIds.filter((x) => x === id).length) return false;
+    }
+    for (const id of ingredientIds) inv[id] -= 1;
     const recipe = PS.findRecipe(ingredientIds);
     cauldron.state = 'reserved';
     cauldron.recipe = recipe || PS.SLUDGE;
@@ -1486,7 +1688,7 @@ PS.Brewing = {
 };
 
 };
-gdjs.ShopCode.userFunc0x965518 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8e81c0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: interface =====
 // HUD (top), navigation (bottom), panels (brew, orders, ingredients,
@@ -2058,24 +2260,96 @@ PS.UI = {
   },
 
   buildWorkers(G, P) {
-    const area = this.frame(G, P, 'Workers', 620);
-    let y = area.y;
-    this.panelBox(G, 'PanelParchment', area.x, y, area.w, 150, P.items, 16);
-    this.icon(G, 'icon_workers', area.x + 56, y + 75, 84, P.items, 'UI', 17);
-    this.text(G, 'You — the shop owner', area.x + 110, y + 16, area.w - 130, 30, COLORS.ink, 'left', P.items, 'UI', 17);
-    const sp = Math.round(100 * G.mult('swift_shoes', +1));
-    const hands = Math.round(100 / G.mult('quick_hands', -1));
-    this.text(G, 'Speed ' + sp + '%   ·   Work speed ' + hands + '%\nTakes orders, brews, collects and delivers.',
-      area.x + 110, y + 56, area.w - 130, 22, COLORS.muted, 'left', P.items, 'UI', 17);
-    y += 166;
-    this.panelBox(G, 'BtnGray', area.x, y, area.w, 150, P.items, 16);
-    this.icon(G, 'icon_lock', area.x + 56, y + 75, 64, P.items, 'UI', 17);
-    this.text(G, 'Hire an apprentice', area.x + 110, y + 16, area.w - 130, 30, '255;255;255', 'left', P.items, 'UI', 17);
-    this.text(G, 'Apprentices who brew, deliver and clean on their own arrive in the next update (Milestone 3).',
-      area.x + 110, y + 56, area.w - 130, 22, '240;240;240', 'left', P.items, 'UI', 17);
-    y += 166;
-    this.text(G, 'Tip: tap things in the shop to give the owner tasks. Up to ' + PS.Workers.MAX_QUEUE +
-      ' tasks are queued; numbers show the order.', area.x, y, area.w, 22, COLORS.muted, 'left', P.items, 'UI', 16);
+    const area = this.frame(G, P, 'Workers', 1000);
+    const ROLE = { all: 'All jobs', service: 'Orders & delivery', brew: 'Brewing only' };
+    const rows = [];
+    // The owner follows your taps.
+    rows.push((x, y, w, h) => {
+      this.panelBox(G, 'PanelParchment', x, y, w, h, P.items, 16);
+      this.icon(G, 'icon_workers', x + 50, y + 60, 74, P.items, 'UI', 17);
+      this.text(G, 'You, the shop owner', x + 100, y + 16, w - 120, 30, COLORS.ink, 'left', P.items, 'UI', 17);
+      const o = G.owner;
+      this.text(G, 'Follows your taps. Now: ' + (o.task ? PS.TASKS[o.task.type].label : 'idle') +
+        '\nShop upgrades (Swift Shoes, Quick Hands) help every worker.', x + 100, y + 56, w - 120, 22, COLORS.muted,
+        'left', P.items, 'UI', 17);
+    });
+    // Hired apprentices work on their own.
+    G.state.workers.forEach((rec, i) => {
+      const index = i + 1;
+      const type = PS.data.workerTypes[i];
+      const wk = G.workers.find((k) => k.index === index && !k.isOwner);
+      rows.push((x, y, w, h) => {
+        this.panelBox(G, 'PanelParchment', x, y, w, h, P.items, 16);
+        this.icon(G, 'icon_workers', x + 46, y + 46, 64, P.items, 'UI', 17);
+        this.text(G, type.name + ' (apprentice)', x + 90, y + 12, 300, 30, COLORS.ink, 'left', P.items, 'UI', 17);
+        const now = wk && wk.task ? PS.TASKS[wk.task.type].label : 'Looking for work';
+        this.text(G, 'Now: ' + now, x + 90, y + 48, 300, 22, COLORS.muted, 'left', P.items, 'UI', 17);
+        this.button(G, P, x + w - 230, y + 12, 220, 56, 'BtnBlue', ROLE[rec.role], {
+          tag: 'role:' + index,
+          size: 22,
+          onTap: () => {
+            G.cycleWorkerRole(index);
+            this.rebuild(G);
+          },
+        });
+        const stats = [['speed', 'Speed', 'icon_speed'], ['brew', 'Brewing', 'icon_brew'], ['service', 'Service', 'icon_order']];
+        const bw = (w - 30) / 3;
+        stats.forEach(([id, label, ic], j) => {
+          const lvl = rec.stats[id];
+          const bx = x + 10 + j * (bw + 5);
+          const by = y + 86;
+          this.text(G, label + ' Lv ' + lvl + '/5', bx, by, bw, 22, '60;110;160', 'center', P.items, 'UI', 17);
+          if (lvl >= 5) {
+            this.text(G, 'MAX', bx, by + 36, bw, 30, COLORS.green, 'center', P.items, 'UI', 17);
+            return;
+          }
+          const cost = G.workerUpgradeCost(index, id);
+          this.button(G, P, bx, by + 28, bw, 60, 'BtnGold', cost + 'g', {
+            tag: 'wup:' + index + ':' + id,
+            icon: ic,
+            iconSize: 32,
+            size: 24,
+            disabled: G.state.gold < cost,
+            onTap: () => {
+              G.upgradeWorker(index, id);
+              this.rebuild(G);
+            },
+            onDisabled: () => this.toast(G, 'Not enough gold'),
+          });
+        });
+      });
+    });
+    // Next hire
+    const next = G.nextWorkerType();
+    rows.push((x, y, w, h) => {
+      if (!next) {
+        this.text(G, 'All apprentices hired. More arrive in future shops.', x, y + 20, w, 24, COLORS.muted, 'center',
+          P.items, 'UI', 17);
+        return;
+      }
+      const locked = G.state.level < next.minShopLevel;
+      this.panelBox(G, locked ? 'BtnGray' : 'PanelParchment', x, y, w, h, P.items, 16);
+      this.icon(G, locked ? 'icon_lock' : 'icon_plus', x + 46, y + 60, 60, P.items, 'UI', 17);
+      this.text(G, 'Hire ' + next.name, x + 90, y + 14, 300, 30, locked ? '255;255;255' : COLORS.ink, 'left', P.items, 'UI', 17);
+      this.text(G, locked ? 'Unlocks at shop level ' + next.minShopLevel
+        : 'Takes orders, brews and delivers on their own.', x + 90, y + 52, w - 330, 22,
+        locked ? '235;235;235' : COLORS.muted, 'left', P.items, 'UI', 17);
+      if (!locked) {
+        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', next.hireCost + 'g', {
+          tag: 'hire',
+          icon: 'icon_coin',
+          iconSize: 36,
+          size: 30,
+          disabled: G.state.gold < next.hireCost,
+          onTap: () => {
+            G.hireWorker();
+            this.rebuild(G);
+          },
+          onDisabled: () => this.toast(G, 'Not enough gold'),
+        });
+      }
+    });
+    this.list(G, P, area, 210, rows);
   },
 
   buildSettings(G, P) {
@@ -2230,7 +2504,9 @@ PS.UI = {
       numBack.hide(true);
       num.hide(true);
       badge.hide(!seated);
-      const a = c.state === 'waitingOrder' ? 'icon_order' : 'icon_hourglass';
+      // An apprentice is on it, otherwise: needs order taking / waiting for a potion.
+      const helper = PS.Workers.claimedBy(G, c);
+      const a = helper && !helper.isOwner ? 'icon_workers' : c.state === 'waitingOrder' ? 'icon_order' : 'icon_hourglass';
       badge.setAnimationName(a);
       const s = c.state === 'waitingOrder' ? 30 + 4 * Math.sin(G.time * 8) : 24;
       badge.setWidth(s);
@@ -2426,8 +2702,8 @@ PS.UI = {
     const p = PS.proj.toScreen(x, y, z);
     if (!p) return;
     const items = [];
-    const t = this.text(G, str, p[0] - 100, p[1] - 30, 200, 30, '255;240;170', 'center', items, 'Overlay', 30,
-      '60;30;10');
+    const t = this.text(G, str, p[0] - 170, p[1] - 30, 340, str.length > 12 ? 24 : 30, '255;240;170', 'center', items,
+      'Overlay', 30, '60;30;10');
     let ic = null;
     if (iconName) {
       ic = this.icon(G, iconName, p[0], p[1] - 58, 36, items, 'Overlay', 30);
@@ -2442,8 +2718,9 @@ PS.UI = {
     const W = this.W(G);
     const items = [];
     const w = Math.min(W - 40, 640);
-    this.panelBox(G, 'PanelDark', W / 2 - w / 2, 150, w, 60, items, 40);
-    this.text(G, str, W / 2 - w / 2 + 10, 165, w - 20, 26, '255;255;255', 'center', items, 'UI', 41);
+    // Sits over the owner's task line so it never covers a panel title.
+    this.panelBox(G, 'PanelDark', W / 2 - w / 2, 84, w, 56, items, 40);
+    this.text(G, str, W / 2 - w / 2 + 10, 97, w - 20, 26, '255;255;255', 'center', items, 'UI', 41);
     G.ui.toast = { items, t: 2.4 };
   },
 
@@ -2548,7 +2825,7 @@ PS.UI = {
     }
     // Live panels refresh a few times per second (timers, patience bars).
     G.ui.refreshTimer -= dt;
-    const live = G.ui.panel && (G.ui.panel.name === 'orders' || G.ui.dirty);
+    const live = G.ui.panel && (G.ui.panel.name === 'orders' || G.ui.panel.name === 'workers' || G.ui.dirty);
     if (live && G.ui.refreshTimer <= 0 && !G.ui.dragging) {
       G.ui.refreshTimer = 0.5;
       G.ui.dirty = false;
@@ -2633,7 +2910,7 @@ PS.Input = {
 };
 
 };
-gdjs.ShopCode.userFunc0x967078 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8ba3c8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game state, progression and main loop =====
 const PS = gdjs.PotionShop;
@@ -2679,6 +2956,7 @@ PS.Game = class {
     PS.setupCamera(runtimeScene);
     PS.World.init(this);
     PS.Workers.createOwner(this);
+    this.state.workers.forEach((record, i) => PS.Workers.createApprentice(this, i + 1, record));
     PS.UI.init(this);
     this.setShadows(this.settings.shadows);
     this.started = true;
@@ -2727,6 +3005,48 @@ PS.Game = class {
     PS.UI.toast(this, u.name + ' purchased!');
     this.saveNow();
     return true;
+  }
+
+  // ----- hired apprentices
+  nextWorkerType() {
+    return PS.data.workerTypes[this.state.workers.length] || null;
+  }
+  hireWorker() {
+    const t = this.nextWorkerType();
+    if (!t || this.state.gold < t.hireCost || this.state.level < t.minShopLevel) return false;
+    this.addGold(-t.hireCost);
+    const record = { type: t.id, role: 'all', stats: { speed: 0, brew: 0, service: 0 } };
+    this.state.workers.push(record);
+    const w = PS.Workers.createApprentice(this, this.state.workers.length, record);
+    // Walk in from the door.
+    w.obj.setPosition(this.door[0], this.door[1]);
+    PS.FX.sparkleAt(this, this.door[0], this.door[1], 40);
+    PS.Audio.play(this, 'levelup');
+    PS.UI.toast(this, t.name + ' joined your shop!');
+    this.saveNow();
+    return true;
+  }
+  workerUpgradeCost(index, stat) {
+    const b = PS.data.balance;
+    const lvl = this.state.workers[index - 1].stats[stat] || 0;
+    return Math.round(b.workerUpgradeBase * Math.pow(b.workerUpgradeGrowth, lvl) * (1 + 0.6 * (index - 1)));
+  }
+  upgradeWorker(index, stat) {
+    const rec = this.state.workers[index - 1];
+    if (!rec || rec.stats[stat] >= 5) return false;
+    const cost = this.workerUpgradeCost(index, stat);
+    if (this.state.gold < cost) return false;
+    this.addGold(-cost);
+    rec.stats[stat] += 1;
+    PS.Audio.play(this, 'buy');
+    this.saveNow();
+    return true;
+  }
+  cycleWorkerRole(index) {
+    const rec = this.state.workers[index - 1];
+    const roles = ['all', 'service', 'brew'];
+    rec.role = roles[(roles.indexOf(rec.role) + 1) % roles.length];
+    this.requestSave();
   }
 
   // ----- economy and progression
@@ -2823,7 +3143,7 @@ PS.Game = class {
 };
 
 };
-gdjs.ShopCode.userFunc0x985df8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x8ba498 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // Create the game once the systems above are defined.
 const PS = gdjs.PotionShop;
@@ -2842,7 +3162,7 @@ gdjs.ShopCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.ShopCode.userFunc0x8bacd0(runtimeScene);
+gdjs.ShopCode.userFunc0x977090(runtimeScene);
 
 }
 
@@ -2850,7 +3170,7 @@ gdjs.ShopCode.userFunc0x8bacd0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x96f210(runtimeScene);
+gdjs.ShopCode.userFunc0x8e7d38(runtimeScene);
 
 }
 
@@ -2858,7 +3178,7 @@ gdjs.ShopCode.userFunc0x96f210(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x96f2d8(runtimeScene);
+gdjs.ShopCode.userFunc0x8e7dc8(runtimeScene);
 
 }
 
@@ -2866,7 +3186,7 @@ gdjs.ShopCode.userFunc0x96f2d8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x96f3a0(runtimeScene);
+gdjs.ShopCode.userFunc0x8e7e90(runtimeScene);
 
 }
 
@@ -2874,7 +3194,7 @@ gdjs.ShopCode.userFunc0x96f3a0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x96f4c0(runtimeScene);
+gdjs.ShopCode.userFunc0x8e7fb0(runtimeScene);
 
 }
 
@@ -2882,7 +3202,7 @@ gdjs.ShopCode.userFunc0x96f4c0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x96f598(runtimeScene);
+gdjs.ShopCode.userFunc0x98dab8(runtimeScene);
 
 }
 
@@ -2890,7 +3210,7 @@ gdjs.ShopCode.userFunc0x96f598(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x965008(runtimeScene);
+gdjs.ShopCode.userFunc0x8e80e8(runtimeScene);
 
 }
 
@@ -2898,7 +3218,7 @@ gdjs.ShopCode.userFunc0x965008(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x965518(runtimeScene);
+gdjs.ShopCode.userFunc0x8e81c0(runtimeScene);
 
 }
 
@@ -2906,7 +3226,7 @@ gdjs.ShopCode.userFunc0x965518(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x967078(runtimeScene);
+gdjs.ShopCode.userFunc0x8ba3c8(runtimeScene);
 
 }
 
@@ -2914,12 +3234,12 @@ gdjs.ShopCode.userFunc0x967078(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x985df8(runtimeScene);
+gdjs.ShopCode.userFunc0x8ba498(runtimeScene);
 
 }
 
 
-};gdjs.ShopCode.userFunc0x96bf38 = function GDJSInlineCode(runtimeScene) {
+};gdjs.ShopCode.userFunc0x8b9470 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const game = runtimeScene.__potionShop;
 if (game) game.update();
@@ -2945,7 +3265,7 @@ gdjs.ShopCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.ShopCode.userFunc0x96bf38(runtimeScene);
+gdjs.ShopCode.userFunc0x8b9470(runtimeScene);
 
 }
 
@@ -2997,6 +3317,12 @@ gdjs.ShopCode.GDCustMageObjects1.length = 0;
 gdjs.ShopCode.GDCustMageObjects2.length = 0;
 gdjs.ShopCode.GDCustRogueObjects1.length = 0;
 gdjs.ShopCode.GDCustRogueObjects2.length = 0;
+gdjs.ShopCode.GDApprenticePipObjects1.length = 0;
+gdjs.ShopCode.GDApprenticePipObjects2.length = 0;
+gdjs.ShopCode.GDApprenticeMapleObjects1.length = 0;
+gdjs.ShopCode.GDApprenticeMapleObjects2.length = 0;
+gdjs.ShopCode.GDApprenticeBrambleObjects1.length = 0;
+gdjs.ShopCode.GDApprenticeBrambleObjects2.length = 0;
 gdjs.ShopCode.GDLiquidObjects1.length = 0;
 gdjs.ShopCode.GDLiquidObjects2.length = 0;
 gdjs.ShopCode.GDBubbleObjects1.length = 0;
@@ -3083,6 +3409,12 @@ gdjs.ShopCode.GDCustMageObjects1.length = 0;
 gdjs.ShopCode.GDCustMageObjects2.length = 0;
 gdjs.ShopCode.GDCustRogueObjects1.length = 0;
 gdjs.ShopCode.GDCustRogueObjects2.length = 0;
+gdjs.ShopCode.GDApprenticePipObjects1.length = 0;
+gdjs.ShopCode.GDApprenticePipObjects2.length = 0;
+gdjs.ShopCode.GDApprenticeMapleObjects1.length = 0;
+gdjs.ShopCode.GDApprenticeMapleObjects2.length = 0;
+gdjs.ShopCode.GDApprenticeBrambleObjects1.length = 0;
+gdjs.ShopCode.GDApprenticeBrambleObjects2.length = 0;
 gdjs.ShopCode.GDLiquidObjects1.length = 0;
 gdjs.ShopCode.GDLiquidObjects2.length = 0;
 gdjs.ShopCode.GDBubbleObjects1.length = 0;

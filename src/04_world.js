@@ -10,6 +10,7 @@ PS.World = {
     // --- Waypoints placed on the hidden "Nav" layer.
     G.queueSpots = [];
     G.spawns = [];
+    const homes = [];
     for (const w of scene.getObjects('Waypoint')) {
       const kind = PS.varStr(w, 'Kind', '');
       const p = [w.getX(), w.getY()];
@@ -18,10 +19,12 @@ PS.World = {
       else if (kind === 'home') G.home = p;
       else if (kind === 'spawn') G.spawns.push(p);
       else if (kind === 'queue') G.queueSpots.push({ order: PS.varNum(w, 'Order', 0), p });
+      else if (kind === 'workerHome') homes.push({ order: PS.varNum(w, 'Order', 0), p });
     }
     G.queueSpots.sort((a, b) => a.order - b.order);
     G.queueSpots = G.queueSpots.map((q) => q.p).slice(0, PS.data.balance.queueSize + 1);
     G.queue = [];
+    G.workerHomes = homes.sort((a, b) => a.order - b.order).map((h) => h.p);
 
     // --- Tables (each TableSet has one chair = one seat).
     G.seats = scene

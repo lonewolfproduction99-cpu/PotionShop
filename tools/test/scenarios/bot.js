@@ -27,9 +27,16 @@ module.exports = async ({ sleep, evalG, shot }) => {
         const ing = PS.data.ingredientById[id];
         if ((s.inventory[id] || 0) < 3 && s.inventory[id] + ing.bundle <= G.storageCap() && s.gold >= ing.cost * ing.bundle + 10) { G.addGold(-ing.cost * ing.bundle); s.inventory[id] += ing.bundle; }
       }
+      // Hire apprentices, then train them.
+      const next = G.nextWorkerType();
+      if (next && s.level >= next.minShopLevel && s.gold >= next.hireCost + 40) {
+        window.__bot.buys.push([Math.round(G.time), 'hire ' + next.name, next.hireCost]);
+        G.hireWorker();
+      }
       // Buy upgrades when comfortably rich (keep a herb budget).
       const order = ['extra_table', 'extra_cauldron', 'quick_brew', 'cozy_decor', 'quick_hands', 'swift_shoes', 'fine_bottles', 'herb_storage'];
-      for (const id of order) {
+      const saving = next && s.level >= next.minShopLevel; // save up for the next apprentice
+      for (const id of saving ? [] : order) {
         const u = PS.data.upgradeById[id];
         if (s.level >= u.minShopLevel && G.level(id) < G.upgradeMax(u) && s.gold >= G.upgradeCost(u) + 40) {
           window.__bot.buys.push([Math.round(G.time), id, G.upgradeCost(u)]);
@@ -37,6 +44,14 @@ module.exports = async ({ sleep, evalG, shot }) => {
           break;
         }
       }
+      s.workers.forEach((rec, i) => {
+        for (const st of ['speed', 'brew', 'service']) {
+          if (rec.stats[st] < 5 && s.gold >= G.workerUpgradeCost(i + 1, st) + 150) {
+            window.__bot.buys.push([Math.round(G.time), rec.type + ' ' + st, G.workerUpgradeCost(i + 1, st)]);
+            G.upgradeWorker(i + 1, st);
+          }
+        }
+      });
       if (G.ui.panel && G.ui.panel.name === 'levelup') PS.UI.close(G);
     };
   });
@@ -47,7 +62,7 @@ module.exports = async ({ sleep, evalG, shot }) => {
       window.__botTick();
       const G = gdjs.PotionShop.game; const s = G.state;
       return { t: G.time, gold: Math.round(s.gold), level: s.level, served: s.served, lost: s.lost, sat: Math.round(s.satisfaction),
-        objects: G.scene.getAdhocListOfAllInstances().length, customers: G.customers.length, queue: G.queue.length };
+        objects: G.scene.getAdhocListOfAllInstances().length, customers: G.customers.length, queue: G.queue.length, workers: G.workers.length };
     });
     if (info.t - lastLog >= 30) { lastLog = info.t; console.log(JSON.stringify(info)); }
     if (info.t >= minutes * 60) break;

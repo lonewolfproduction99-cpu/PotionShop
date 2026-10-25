@@ -42,6 +42,7 @@ PS.Game = class {
     PS.setupCamera(runtimeScene);
     PS.World.init(this);
     PS.Workers.createOwner(this);
+    this.state.workers.forEach((record, i) => PS.Workers.createApprentice(this, i + 1, record));
     PS.UI.init(this);
     this.setShadows(this.settings.shadows);
     this.started = true;
@@ -90,6 +91,48 @@ PS.Game = class {
     PS.UI.toast(this, u.name + ' purchased!');
     this.saveNow();
     return true;
+  }
+
+  // ----- hired apprentices
+  nextWorkerType() {
+    return PS.data.workerTypes[this.state.workers.length] || null;
+  }
+  hireWorker() {
+    const t = this.nextWorkerType();
+    if (!t || this.state.gold < t.hireCost || this.state.level < t.minShopLevel) return false;
+    this.addGold(-t.hireCost);
+    const record = { type: t.id, role: 'all', stats: { speed: 0, brew: 0, service: 0 } };
+    this.state.workers.push(record);
+    const w = PS.Workers.createApprentice(this, this.state.workers.length, record);
+    // Walk in from the door.
+    w.obj.setPosition(this.door[0], this.door[1]);
+    PS.FX.sparkleAt(this, this.door[0], this.door[1], 40);
+    PS.Audio.play(this, 'levelup');
+    PS.UI.toast(this, t.name + ' joined your shop!');
+    this.saveNow();
+    return true;
+  }
+  workerUpgradeCost(index, stat) {
+    const b = PS.data.balance;
+    const lvl = this.state.workers[index - 1].stats[stat] || 0;
+    return Math.round(b.workerUpgradeBase * Math.pow(b.workerUpgradeGrowth, lvl) * (1 + 0.6 * (index - 1)));
+  }
+  upgradeWorker(index, stat) {
+    const rec = this.state.workers[index - 1];
+    if (!rec || rec.stats[stat] >= 5) return false;
+    const cost = this.workerUpgradeCost(index, stat);
+    if (this.state.gold < cost) return false;
+    this.addGold(-cost);
+    rec.stats[stat] += 1;
+    PS.Audio.play(this, 'buy');
+    this.saveNow();
+    return true;
+  }
+  cycleWorkerRole(index) {
+    const rec = this.state.workers[index - 1];
+    const roles = ['all', 'service', 'brew'];
+    rec.role = roles[(roles.indexOf(rec.role) + 1) % roles.length];
+    this.requestSave();
   }
 
   // ----- economy and progression

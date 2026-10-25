@@ -1,8 +1,11 @@
 // ===== Potion Shop: workers and task queue =====
-// The shop owner (and later hired workers) performs one physical task at a
-// time. Taps add tasks to a queue so nothing is lost while the owner is busy.
+// Every worker performs one physical task at a time.
+// - The shop owner follows the player's taps: taps add tasks to the owner's
+//   queue so nothing is lost while the owner is busy.
+// - Hired apprentices pick their own jobs (collect potions, deliver, take
+//   orders, brew for orders nobody is brewing yet), limited by their role.
 // Exclusive targets (a customer's order, a cauldron, a delivery) are claimed
-// so two tasks can never work on the same thing.
+// so two workers can never work on the same thing.
 const PS = gdjs.PotionShop;
 const U = PS.util;
 
@@ -23,6 +26,8 @@ PS.Workers = {
     const obj = PS.create(G.scene, 'Owner', hx, hy, '');
     const w = {
       id: 'owner',
+      index: 0,
+      isOwner: true,
       obj,
       speed: PS.data.balance.ownerSpeed,
       task: null,
@@ -37,6 +42,107 @@ PS.Workers = {
     G.workers = [w];
     G.owner = w;
     return w;
+  },
+
+  // Apprentice `index` (1-based) using its saved record in G.state.workers.
+  createApprentice(G, index, record) {
+    const type = PS.data.workerTypes[index - 1];
+    const home = G.workerHomes[index - 1] || G.home;
+    const obj = PS.create(G.scene, type.object, home[0], home[1], '');
+    const w = {
+      id: type.id,
+      index,
+      isOwner: false,
+      name: type.name,
+      record, // saved data: role and stats
+      obj,
+      home,
+      speed: PS.data.balance.ownerSpeed,
+      task: null,
+      queue: [],
+      carrying: null,
+      anim: '',
+      path: null,
+      idleAnim: 'Idle',
+      thinkTimer: Math.random() * 0.3,
+    };
+    PS.faceInstantly(w, 0, 1);
+    PS.setAnim(w, 'Idle');
+    G.workers.push(w);
+    return w;
+  },
+
+  // Worker currently working on (or heading to) a target, if any.
+  claimedBy(G, target) {
+    for (const w of G.workers) {
+      if (w.task && w.task.target === target) return w;
+      if (w.queue.some((t) => t.target === target)) return w;
+    }
+    return null;
+  },
+
+  statMult(w, stat) {
+    if (w.isOwner) return 1;
+    return 1 + 0.15 * (w.record.stats[stat] || 0);
+  },
+
+  // ----- Apprentice brain: choose the most useful job allowed by the role.
+  think(G, w) {
+    const role = w.record.role;
+    const service = role === 'all' || role === 'service';
+    const brew = role === 'all' || role === 'brew';
+    const free = (type, target) => !this.isQueued(G, type, target);
+    const d = (x, y) => U.dist(w.obj.getX(), w.obj.getY(), x, y);
+    const options = [];
+    if (brew) {
+      for (const c of G.cauldrons) {
+        if (c.unlocked && c.state === 'done' && free('collect', c)) options.push({ p: 0, dist: d(c.x, c.y), task: { type: 'collect', target: c } });
+      }
+    }
+    if (service) {
+      for (const c of PS.World.pendingOrders(G)) {
+        if (!c.deliveryReserved && (G.state.stock[c.recipe.id] || 0) > 0 && free('fetchStock', c)) {
+          options.push({ p: 1, dist: d(G.counter.x, G.counter.y), task: { type: 'fetchStock', target: c } });
+        }
+      }
+      for (const c of G.customers) {
+        if (c.state === 'waitingOrder' && free('takeOrder', c)) {
+          // Most impatient customers first.
+          options.push({ p: 2 + c.patience / c.maxPatience, dist: d(c.obj.getX(), c.obj.getY()), task: { type: 'takeOrder', target: c } });
+        }
+      }
+    }
+    if (brew) {
+      const job = this.brewJob(G, w);
+      if (job) options.push({ p: 3, dist: d(job.cauldron.x, job.cauldron.y), task: null, job });
+    }
+    if (!options.length) return;
+    options.sort((a, b) => a.p - b.p || a.dist - b.dist);
+    const best = options[0];
+    if (best.job) {
+      if (!PS.Brewing.reserve(G, best.job.cauldron, best.job.recipe.ingredients)) return;
+      this.begin(G, w, { type: 'startBrew', target: best.job.cauldron });
+    } else {
+      this.begin(G, w, best.task);
+    }
+  },
+
+  // The oldest order (or seated customer) whose potion nobody is making yet,
+  // and the nearest idle cauldron to brew it in.
+  brewJob(G, w) {
+    const cauldrons = G.cauldrons.filter((c) => c.unlocked && c.state === 'idle');
+    if (!cauldrons.length) return null;
+    const demand = PS.World.pendingOrders(G).concat(G.customers.filter((c) => c.state === 'waitingOrder'));
+    const counted = {};
+    for (const c of demand) {
+      const id = c.recipe.id;
+      counted[id] = (counted[id] || 0) + 1;
+      if (PS.Brewing.plannedFor(G, id) < counted[id] && PS.Brewing.canBrew(G, c.recipe)) {
+        cauldrons.sort((a, b) => U.dist(w.obj.getX(), w.obj.getY(), a.x, a.y) - U.dist(w.obj.getX(), w.obj.getY(), b.x, b.y));
+        return { cauldron: cauldrons[0], recipe: c.recipe };
+      }
+    }
+    return null;
   },
 
   // Is a task with this type/target already queued or running?
@@ -90,8 +196,9 @@ PS.Workers = {
   },
 
   // Where the worker stands to perform a task, and which way it faces.
-  taskSpot(G, task) {
+  taskSpot(G, task, w) {
     const t = task.target;
+    const offset = w && !w.isOwner ? (w.index % 2 ? 1 : -1) * 18 * Math.ceil(w.index / 2) : 0;
     switch (task.type) {
       case 'takeOrder':
       case 'deliver':
@@ -102,7 +209,7 @@ PS.Workers = {
         return { x: t.standX, y: t.standY, fx: 0, fy: -1 };
       case 'fetchStock':
       case 'store':
-        return { x: G.counter.standX, y: G.counter.standY, fx: 0, fy: 1 };
+        return { x: G.counter.standX + offset, y: G.counter.standY, fx: 0, fy: 1 };
     }
     return null;
   },
@@ -127,7 +234,7 @@ PS.Workers = {
     return false;
   },
 
-  actionTime(G, type) {
+  actionTime(G, type, w) {
     const b = PS.data.balance;
     const base = {
       takeOrder: b.takeOrderTime,
@@ -137,7 +244,9 @@ PS.Workers = {
       fetchStock: b.collectTime,
       store: b.collectTime * 0.6,
     }[type];
-    return base * G.mult('quick_hands', -1);
+    const stat = type === 'takeOrder' || type === 'deliver' ? 'service' : 'brew';
+    const apprentice = w && !w.isOwner ? PS.data.balance.apprenticeSlowness : 1;
+    return (base * apprentice * G.mult('quick_hands', -1)) / (w ? this.statMult(w, stat) : 1);
   },
 
   // Called when a customer leaves: drop tasks that targeted them.
@@ -160,13 +269,21 @@ PS.Workers = {
 
   update(G, dt) {
     for (const w of G.workers) {
-      w.speed = PS.data.balance.ownerSpeed * G.mult('swift_shoes', +1);
+      w.speed = (PS.data.balance.ownerSpeed * G.mult('swift_shoes', +1) * this.statMult(w, 'speed')) /
+        (w.isOwner ? 1 : PS.data.balance.apprenticeSlowness);
       if (!w.task) this.nextTask(G, w);
+      if (!w.task && !w.isOwner) {
+        w.thinkTimer -= dt;
+        if (w.thinkTimer <= 0) {
+          w.thinkTimer = 0.3;
+          this.think(G, w);
+        }
+      }
       const task = w.task;
       if (!task) {
-        // Idle: go back home behind the counter.
+        // Idle: go back to the worker's resting spot.
         if (!w.path || !w.path.length) {
-          const [hx, hy] = G.home;
+          const [hx, hy] = w.home || G.home;
           if (U.dist(w.obj.getX(), w.obj.getY(), hx, hy) > 6 && !w.goingHome) {
             w.goingHome = true;
             PS.goTo(w, hx, hy);
@@ -201,7 +318,7 @@ PS.Workers = {
         if (PS.walk(w, dt)) {
           task.phase = 'act';
           task.t = 0;
-          task.dur = this.actionTime(G, task.type);
+          task.dur = this.actionTime(G, task.type, w);
           PS.faceInstantly(w, task.spot.fx, task.spot.fy);
           PS.setAnim(w, 'Work');
           PS.Audio.play(G, task.type === 'startBrew' ? 'splash' : 'tap');
@@ -231,7 +348,7 @@ PS.Workers = {
   },
 
   begin(G, w, task) {
-    const spot = this.taskSpot(G, task);
+    const spot = this.taskSpot(G, task, w);
     if (!spot) {
       if (task.type === 'deliver') this.retargetDelivery(G, w, task);
       return;
@@ -251,8 +368,9 @@ PS.Workers = {
         t.patience = Math.min(t.maxPatience, t.patience + t.maxPatience * 0.15);
         PS.UI.floatText(G, t.obj.getX(), t.obj.getY(), 100, t.recipe.name, t.recipe.icon);
         // A matching potion is already waiting on the counter: bring it.
-        if ((G.state.stock[t.recipe.id] || 0) > 0) {
-          this.enqueue(G, { type: 'fetchStock', target: t }, true);
+        if ((G.state.stock[t.recipe.id] || 0) > 0 && !this.isQueued(G, 'fetchStock', t)) {
+          if (w.isOwner) this.enqueue(G, { type: 'fetchStock', target: t }, true);
+          else this.begin(G, w, { type: 'fetchStock', target: t });
         }
         PS.UI.markDirty(G);
         break;

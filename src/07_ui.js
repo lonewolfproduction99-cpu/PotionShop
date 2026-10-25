@@ -568,24 +568,96 @@ PS.UI = {
   },
 
   buildWorkers(G, P) {
-    const area = this.frame(G, P, 'Workers', 620);
-    let y = area.y;
-    this.panelBox(G, 'PanelParchment', area.x, y, area.w, 150, P.items, 16);
-    this.icon(G, 'icon_workers', area.x + 56, y + 75, 84, P.items, 'UI', 17);
-    this.text(G, 'You — the shop owner', area.x + 110, y + 16, area.w - 130, 30, COLORS.ink, 'left', P.items, 'UI', 17);
-    const sp = Math.round(100 * G.mult('swift_shoes', +1));
-    const hands = Math.round(100 / G.mult('quick_hands', -1));
-    this.text(G, 'Speed ' + sp + '%   ·   Work speed ' + hands + '%\nTakes orders, brews, collects and delivers.',
-      area.x + 110, y + 56, area.w - 130, 22, COLORS.muted, 'left', P.items, 'UI', 17);
-    y += 166;
-    this.panelBox(G, 'BtnGray', area.x, y, area.w, 150, P.items, 16);
-    this.icon(G, 'icon_lock', area.x + 56, y + 75, 64, P.items, 'UI', 17);
-    this.text(G, 'Hire an apprentice', area.x + 110, y + 16, area.w - 130, 30, '255;255;255', 'left', P.items, 'UI', 17);
-    this.text(G, 'Apprentices who brew, deliver and clean on their own arrive in the next update (Milestone 3).',
-      area.x + 110, y + 56, area.w - 130, 22, '240;240;240', 'left', P.items, 'UI', 17);
-    y += 166;
-    this.text(G, 'Tip: tap things in the shop to give the owner tasks. Up to ' + PS.Workers.MAX_QUEUE +
-      ' tasks are queued; numbers show the order.', area.x, y, area.w, 22, COLORS.muted, 'left', P.items, 'UI', 16);
+    const area = this.frame(G, P, 'Workers', 1000);
+    const ROLE = { all: 'All jobs', service: 'Orders & delivery', brew: 'Brewing only' };
+    const rows = [];
+    // The owner follows your taps.
+    rows.push((x, y, w, h) => {
+      this.panelBox(G, 'PanelParchment', x, y, w, h, P.items, 16);
+      this.icon(G, 'icon_workers', x + 50, y + 60, 74, P.items, 'UI', 17);
+      this.text(G, 'You, the shop owner', x + 100, y + 16, w - 120, 30, COLORS.ink, 'left', P.items, 'UI', 17);
+      const o = G.owner;
+      this.text(G, 'Follows your taps. Now: ' + (o.task ? PS.TASKS[o.task.type].label : 'idle') +
+        '\nShop upgrades (Swift Shoes, Quick Hands) help every worker.', x + 100, y + 56, w - 120, 22, COLORS.muted,
+        'left', P.items, 'UI', 17);
+    });
+    // Hired apprentices work on their own.
+    G.state.workers.forEach((rec, i) => {
+      const index = i + 1;
+      const type = PS.data.workerTypes[i];
+      const wk = G.workers.find((k) => k.index === index && !k.isOwner);
+      rows.push((x, y, w, h) => {
+        this.panelBox(G, 'PanelParchment', x, y, w, h, P.items, 16);
+        this.icon(G, 'icon_workers', x + 46, y + 46, 64, P.items, 'UI', 17);
+        this.text(G, type.name + ' (apprentice)', x + 90, y + 12, 300, 30, COLORS.ink, 'left', P.items, 'UI', 17);
+        const now = wk && wk.task ? PS.TASKS[wk.task.type].label : 'Looking for work';
+        this.text(G, 'Now: ' + now, x + 90, y + 48, 300, 22, COLORS.muted, 'left', P.items, 'UI', 17);
+        this.button(G, P, x + w - 230, y + 12, 220, 56, 'BtnBlue', ROLE[rec.role], {
+          tag: 'role:' + index,
+          size: 22,
+          onTap: () => {
+            G.cycleWorkerRole(index);
+            this.rebuild(G);
+          },
+        });
+        const stats = [['speed', 'Speed', 'icon_speed'], ['brew', 'Brewing', 'icon_brew'], ['service', 'Service', 'icon_order']];
+        const bw = (w - 30) / 3;
+        stats.forEach(([id, label, ic], j) => {
+          const lvl = rec.stats[id];
+          const bx = x + 10 + j * (bw + 5);
+          const by = y + 86;
+          this.text(G, label + ' Lv ' + lvl + '/5', bx, by, bw, 22, '60;110;160', 'center', P.items, 'UI', 17);
+          if (lvl >= 5) {
+            this.text(G, 'MAX', bx, by + 36, bw, 30, COLORS.green, 'center', P.items, 'UI', 17);
+            return;
+          }
+          const cost = G.workerUpgradeCost(index, id);
+          this.button(G, P, bx, by + 28, bw, 60, 'BtnGold', cost + 'g', {
+            tag: 'wup:' + index + ':' + id,
+            icon: ic,
+            iconSize: 32,
+            size: 24,
+            disabled: G.state.gold < cost,
+            onTap: () => {
+              G.upgradeWorker(index, id);
+              this.rebuild(G);
+            },
+            onDisabled: () => this.toast(G, 'Not enough gold'),
+          });
+        });
+      });
+    });
+    // Next hire
+    const next = G.nextWorkerType();
+    rows.push((x, y, w, h) => {
+      if (!next) {
+        this.text(G, 'All apprentices hired. More arrive in future shops.', x, y + 20, w, 24, COLORS.muted, 'center',
+          P.items, 'UI', 17);
+        return;
+      }
+      const locked = G.state.level < next.minShopLevel;
+      this.panelBox(G, locked ? 'BtnGray' : 'PanelParchment', x, y, w, h, P.items, 16);
+      this.icon(G, locked ? 'icon_lock' : 'icon_plus', x + 46, y + 60, 60, P.items, 'UI', 17);
+      this.text(G, 'Hire ' + next.name, x + 90, y + 14, 300, 30, locked ? '255;255;255' : COLORS.ink, 'left', P.items, 'UI', 17);
+      this.text(G, locked ? 'Unlocks at shop level ' + next.minShopLevel
+        : 'Takes orders, brews and delivers on their own.', x + 90, y + 52, w - 330, 22,
+        locked ? '235;235;235' : COLORS.muted, 'left', P.items, 'UI', 17);
+      if (!locked) {
+        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', next.hireCost + 'g', {
+          tag: 'hire',
+          icon: 'icon_coin',
+          iconSize: 36,
+          size: 30,
+          disabled: G.state.gold < next.hireCost,
+          onTap: () => {
+            G.hireWorker();
+            this.rebuild(G);
+          },
+          onDisabled: () => this.toast(G, 'Not enough gold'),
+        });
+      }
+    });
+    this.list(G, P, area, 210, rows);
   },
 
   buildSettings(G, P) {
@@ -740,7 +812,9 @@ PS.UI = {
       numBack.hide(true);
       num.hide(true);
       badge.hide(!seated);
-      const a = c.state === 'waitingOrder' ? 'icon_order' : 'icon_hourglass';
+      // An apprentice is on it, otherwise: needs order taking / waiting for a potion.
+      const helper = PS.Workers.claimedBy(G, c);
+      const a = helper && !helper.isOwner ? 'icon_workers' : c.state === 'waitingOrder' ? 'icon_order' : 'icon_hourglass';
       badge.setAnimationName(a);
       const s = c.state === 'waitingOrder' ? 30 + 4 * Math.sin(G.time * 8) : 24;
       badge.setWidth(s);
@@ -936,8 +1010,8 @@ PS.UI = {
     const p = PS.proj.toScreen(x, y, z);
     if (!p) return;
     const items = [];
-    const t = this.text(G, str, p[0] - 100, p[1] - 30, 200, 30, '255;240;170', 'center', items, 'Overlay', 30,
-      '60;30;10');
+    const t = this.text(G, str, p[0] - 170, p[1] - 30, 340, str.length > 12 ? 24 : 30, '255;240;170', 'center', items,
+      'Overlay', 30, '60;30;10');
     let ic = null;
     if (iconName) {
       ic = this.icon(G, iconName, p[0], p[1] - 58, 36, items, 'Overlay', 30);
@@ -952,8 +1026,9 @@ PS.UI = {
     const W = this.W(G);
     const items = [];
     const w = Math.min(W - 40, 640);
-    this.panelBox(G, 'PanelDark', W / 2 - w / 2, 150, w, 60, items, 40);
-    this.text(G, str, W / 2 - w / 2 + 10, 165, w - 20, 26, '255;255;255', 'center', items, 'UI', 41);
+    // Sits over the owner's task line so it never covers a panel title.
+    this.panelBox(G, 'PanelDark', W / 2 - w / 2, 84, w, 56, items, 40);
+    this.text(G, str, W / 2 - w / 2 + 10, 97, w - 20, 26, '255;255;255', 'center', items, 'UI', 41);
     G.ui.toast = { items, t: 2.4 };
   },
 
@@ -1058,7 +1133,7 @@ PS.UI = {
     }
     // Live panels refresh a few times per second (timers, patience bars).
     G.ui.refreshTimer -= dt;
-    const live = G.ui.panel && (G.ui.panel.name === 'orders' || G.ui.dirty);
+    const live = G.ui.panel && (G.ui.panel.name === 'orders' || G.ui.panel.name === 'workers' || G.ui.dirty);
     if (live && G.ui.refreshTimer <= 0 && !G.ui.dragging) {
       G.ui.refreshTimer = 0.5;
       G.ui.dirty = false;

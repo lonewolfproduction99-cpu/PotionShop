@@ -29,7 +29,18 @@ PS.Brewing = {
       }
     }
     if (!PS.Workers.enqueue(G, { type: 'startBrew', target: cauldron })) return false;
-    for (const id in need) inv[id] -= need[id];
+    this.reserve(G, cauldron, ingredientIds);
+    return true;
+  },
+
+  // Pay the ingredients and hold the cauldron until a worker adds them.
+  reserve(G, cauldron, ingredientIds) {
+    if (cauldron.state !== 'idle') return false;
+    const inv = G.state.inventory;
+    for (const id of ingredientIds) {
+      if ((inv[id] || 0) < ingredientIds.filter((x) => x === id).length) return false;
+    }
+    for (const id of ingredientIds) inv[id] -= 1;
     const recipe = PS.findRecipe(ingredientIds);
     cauldron.state = 'reserved';
     cauldron.recipe = recipe || PS.SLUDGE;

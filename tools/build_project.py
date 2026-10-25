@@ -190,6 +190,8 @@ def build_objects(manifest):
     objs.append(model_object("Owner", "char_owner", manifest, CHAR_ANIMS, scale=CHAR_SCALE))
     for cid, oname in CUSTOMER_OBJECTS.items():
         objs.append(model_object(oname, "char_" + cid, manifest, CHAR_ANIMS, scale=CHAR_SCALE))
+    for w in WORKERS:
+        objs.append(model_object(w["Object"], "char_" + w["Id"], manifest, CHAR_ANIMS, scale=CHAR_SCALE))
     # Brewing effects
     objs.append(cube_object("Liquid", "liquid.png", (62, 62, 4)))
     objs.append(cube_object("Bubble", "white.png", (6, 6, 6)))
@@ -267,6 +269,9 @@ def build_instances():
     # Customers wait outside the door when every table is taken.
     for i, (x, y) in enumerate(((320, 922), (320, 966), (372, 1008), (420, 1008))):
         wps.append(("queue", x, y, i + 1))
+    # Resting spots of hired apprentices.
+    for i, (x, y) in enumerate(((292, 330), (350, 330), (408, 330))):
+        wps.append(("workerHome", x, y, i + 1))
     for kind, x, y, order in wps:
         I.append(inst("Waypoint", x - 4, y - 4, layer="Nav", size=(8, 8),
                       variables=[var("Kind", kind), var("Order", order)], key="wp-%s-%d-%d" % (kind, x, y)))
@@ -355,9 +360,15 @@ UPGRADES = [
     dict(Id="extra_cauldron", Name="Extra Cauldron", Description="Brew more potions at the same time.",
          Icon="icon_brew", Tab="expand", BaseCost=120, CostGrowth=2.0, MaxLevel=2, Effect=1, MinShopLevel=2),
 ]
+WORKERS = [
+    dict(Id="pip", Object="ApprenticePip", Name="Pip", HireCost=150, MinShopLevel=2),
+    dict(Id="maple", Object="ApprenticeMaple", Name="Maple", HireCost=500, MinShopLevel=3),
+    dict(Id="bramble", Object="ApprenticeBramble", Name="Bramble", HireCost=1500, MinShopLevel=5),
+]
 BALANCE = dict(StartGold=40, StartIngredients=6, XpPerServe=10, SpawnIntervalStart=12, SpawnIntervalMin=6,
                QueueSize=3, MaxStock=6, StorageBase=20, OwnerSpeed=150, TakeOrderTime=1.4, AddIngredientsTime=1.2,
-               CollectTime=0.8, DeliverTime=0.7, TipMax=0.5, SludgePrice=0)
+               CollectTime=0.8, DeliverTime=0.7, TipMax=0.5, SludgePrice=0,
+               ApprenticeSlowness=1.15, WorkerUpgradeBase=50, WorkerUpgradeGrowth=1.65)
 
 
 # ---------------------------------------------------------------- events
@@ -459,7 +470,7 @@ def build():
         "objectsFolderStructure": {"folderName": "__ROOT"},
         "objectsGroups": [],
         "variables": [var("Recipes", RECIPES), var("Ingredients", INGREDIENTS), var("CustomerTypes", CUSTOMERS),
-                      var("Upgrades", UPGRADES), var("Balance", BALANCE)],
+                      var("Upgrades", UPGRADES), var("WorkerTypes", WORKERS), var("Balance", BALANCE)],
         "layouts": [scene],
         "externalEvents": [],
         "tests": [],
