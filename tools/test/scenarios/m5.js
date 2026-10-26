@@ -88,7 +88,8 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, page }) => {
   await evalG(() => { const G = gdjs.PotionShop.game; G.state.level = 2; G.state.gold = 500; G.hireWorker(); G.state.incomeRate = 120; G.saveNow();
     G.state.lastSeen = Date.now() - 3600 * 1000; gdjs.PotionShop.Save.save(G.state); window.__noSaveOnHide = true; });
   // Reload without the page-hide save overwriting lastSeen.
-  await page.evaluate(() => { document.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true); });
+  await page.evaluate(() => { document.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true);
+    gdjs.PotionShop.game.saveNow = () => {}; }); // also skips the PWA layer's save on pagehide
   await reload();
   const off = await evalG(() => { const G = gdjs.PotionShop.game; return { panel: G.ui.panel && G.ui.panel.name, gold: G.ui.panel && G.ui.panel.params.gold, have: G.state.gold }; });
   await shot('83_offline');
