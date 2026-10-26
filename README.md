@@ -90,7 +90,7 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
   - Costs reach millions after a few prestiges.
 - **Potion Mastery** (Upgrades → *Mastery*): +15% price per level for one potion, up to level 10. Kept forever.
 - **Long tables:** after prestige 1, each table becomes a long table with 2 seats, then 3, 4 and 5 (the maximum). Small decorations in the way are put aside.
-- **Bigger orders:** a customer may order up to 1 potion per prestige level plus one (5 at most). They pay and leave only once every potion has arrived.
+- **Bigger orders:** a customer may order up to 1 potion per prestige level plus one (5 at most). Each potion is paid when it is delivered, with a tip based on the customer's patience at that moment. The customer stays at the table until every potion has arrived.
   - Their bubble shows each potion and ticks off delivered ones.
   - Workers deliver and brew each potion separately.
 - **6 prestige potions:**

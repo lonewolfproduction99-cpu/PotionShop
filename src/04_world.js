@@ -282,13 +282,13 @@ PS.World = {
     this.fillSeatsFromQueue(G);
   },
 
-  // One potion of an order handed over; the customer pays when all arrived.
+  // One potion of an order handed over: the customer pays for it right away
+  // (tip from their patience at that moment) and leaves once all arrived.
   deliverItem(G, c, recipe, quality) {
     const item = PS.Order.deliver(c, recipe.id, quality);
     if (!item) return false;
+    this.payItem(G, c, item);
     if (PS.Order.remaining(c) > 0) {
-      PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, PS.Order.remaining(c) + ' more to go', recipe.icon);
-      PS.Audio.play(G, 'pop');
       PS.UI.markDirty(G);
       return true;
     }
@@ -296,35 +296,37 @@ PS.World = {
     return true;
   },
 
-  // Every potion delivered: pay for all of them and leave happy.
-  serve(G, c) {
+  payItem(G, c, item) {
     const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
     const tip = 1 + PS.data.balance.tipMax * ratio;
-    let price = 0;
-    let mood = 0;
-    let best = 1;
-    for (const it of c.items) {
-      const q = PS.QUALITY[it.quality];
-      price += G.potionPrice(it.recipe) * q.price;
-      mood += q.mood;
-      best = Math.max(best, it.quality);
-    }
-    price = Math.round(price * tip * c.type.tip);
-    mood /= c.items.length;
+    const q = PS.QUALITY[item.quality];
+    const price = Math.round(G.potionPrice(item.recipe) * q.price * tip * c.type.tip);
+    item.paid = price;
     G.addGold(price);
-    G.state.served += 1;
     G.state.earned += price;
-    G.addXp((PS.data.balance.xpPerServe + Math.round(5 * ratio)) * c.items.length);
+    G.addXp(PS.data.balance.xpPerServe + Math.round(5 * ratio));
+    const left = PS.Order.remaining(c);
+    const label = '+' + U.formatGold(price) + (item.quality >= 2 ? '  ' + q.name + '!' : '') +
+      (left > 0 ? '  (' + left + ' more)' : '');
+    // Stack the floating texts of quick deliveries a little.
+    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95 + (c.items.length - 1 - left) * 4, label, 'icon_coin');
+    PS.Audio.play(G, 'coin');
+  },
+
+  // Every potion delivered (and paid): leave happy.
+  serve(G, c) {
+    const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
+    let mood = 0;
+    for (const it of c.items) mood += PS.QUALITY[it.quality].mood;
+    mood /= c.items.length;
+    G.state.served += 1;
     G.recordSatisfaction(U.clamp(50 + 50 * ratio + mood, 0, 100));
-    const label = '+' + U.formatGold(price) + (best >= 2 ? '  ' + PS.QUALITY[best].name + '!' : '');
-    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, label, 'icon_coin');
     // Delighted customers (served before patience dropped below 90%) may leave a special herb.
     if (ratio >= 0.9 && Math.random() < PS.data.balance.giftChance) this.gift(G, c);
     c.state = 'served';
     c.timer = 1.3;
     c.obj.setZ(0);
     PS.setAnim(c, 'Cheer');
-    PS.Audio.play(G, 'coin');
     if (c.seat) {
       c.seat.occupant = null;
       c.seat = null;

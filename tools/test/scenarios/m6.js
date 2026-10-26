@@ -90,7 +90,7 @@ module.exports = async ({ shot, sleep, evalG, tapGame, page }) => {
   check('prestige potion Frost is unlocked', p1.frost);
   await shot('91_after_prestige');
 
-  // 3. Multi-potion order: paid only after both potions arrive; delighted -> gift.
+  // 3. Multi-potion order: each potion is paid on delivery, the customer leaves after the last; delighted -> gift.
   await evalG(() => {
     const PS = gdjs.PotionShop; const G = PS.game; G.spawnTimer = 1e9; G.state.upgrades.extra_table = 3;
     PS.World.applyUnlocks(G); G.state.inventory.starbloom = 0; G.state.inventory.glowcap = 0;
@@ -103,17 +103,18 @@ module.exports = async ({ shot, sleep, evalG, tapGame, page }) => {
     PS.Workers.enqueue(PS.game, { type: 'fetchStock', target: c, recipe: PS.data.recipeById.healing }); }, cid);
   await waitFor((id) => { const c = gdjs.PotionShop.game.customers.find((x) => x.id === id); return c && c.items[0].done; }, 'first potion', 150, cid);
   const half = await evalG((id) => { const G = gdjs.PotionShop.game; const c = G.customers.find((x) => x.id === id);
-    return { state: c.state, left: gdjs.PotionShop.Order.remaining(c), gold: G.state.gold }; }, cid);
+    return { state: c.state, left: gdjs.PotionShop.Order.remaining(c), gold: G.state.gold, seated: !!c.seat,
+      price: Math.round(G.potionPrice(gdjs.PotionShop.data.recipeById.healing)) }; }, cid);
   await sleep(500);
   await shot('92_multi_order_half');
-  check('one of two potions delivered: customer keeps waiting, no payment yet', half.state === 'ordered' && half.left === 1 && half.gold === g0, JSON.stringify(half));
+  check('one of two potions delivered: paid for it, customer stays seated for the other', half.state === 'ordered' && half.seated && half.left === 1 && half.gold - g0 >= Math.round(half.price * 0.85), JSON.stringify(half) + ' was ' + g0);
   await evalG((id) => { const PS = gdjs.PotionShop; const G = PS.game; const c = G.customers.find((x) => x.id === id);
     G.state.stock = { energy: 1 }; PS.Workers.enqueue(G, { type: 'fetchStock', target: c, recipe: PS.data.recipeById.energy }); }, cid);
   await waitFor((id) => { const c = gdjs.PotionShop.game.customers.find((x) => x.id === id); return !c || c.state !== 'ordered'; }, 'served', 150, cid);
   const paid = await evalG(() => { const G = gdjs.PotionShop.game; const PS = gdjs.PotionShop;
     return { gold: G.state.gold, gifts: (G.state.inventory.starbloom || 0) + (G.state.inventory.glowcap || 0),
       base: G.potionPrice(PS.data.recipeById.healing) + G.potionPrice(PS.data.recipeById.energy) }; });
-  check('both potions delivered: pays for both', paid.gold - g0 >= Math.round(paid.base * 0.85), 'earned ' + (paid.gold - g0) + ' base ' + Math.round(paid.base));
+  check('both potions delivered: paid for both in total, customer leaves', paid.gold - g0 >= Math.round(paid.base * 0.85), 'earned ' + (paid.gold - g0) + ' base ' + Math.round(paid.base));
   check('fast service (patience >= 90%) earns a special herb gift', paid.gifts === 1, 'gifts=' + paid.gifts);
   await sleep(300);
   await shot('93_gift');
