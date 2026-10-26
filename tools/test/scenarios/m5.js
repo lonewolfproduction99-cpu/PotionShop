@@ -56,6 +56,9 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, page }) => {
   await evalG(() => {
     const PS = gdjs.PotionShop; const G = PS.game; G.spawnTimer = 1e9;
     G.state.upgrades.extra_table = 3; PS.World.applyUnlocks(G);
+    // Start from an empty shop (the tutorial may have filled every seat).
+    for (const o of G.customers) { if (o.seat) o.seat.occupant = null; PS.Workers.onCustomerGone(G, o); PS.destroy(o.obj); }
+    G.customers = []; G.queue = [];
     const c = PS.World.spawnCustomer(G); PS.Order.set(c, [PS.data.recipeById.energy]);
     const seat = PS.World.freeSeat(G); c.obj.setPosition(seat.x, seat.y); PS.World.sendToSeat(G, c, seat); c.path = [];
     c.state = 'ordered'; c.orderedAt = G.time; c.patience = c.maxPatience;
