@@ -5,10 +5,10 @@
     <link rel="manifest" href="manifest.webmanifest">
 
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
-    <meta name="theme-color" content="#000000" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#1e1528" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
 	<style>
 		body {
@@ -25,6 +25,31 @@
 
         
 	</style>
+    <!-- PWA:BEGIN (added by tools/pwa/apply_pwa.py) -->
+    <meta name="apple-mobile-web-app-title" content="Potion Shop">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <style>
+        html, body { height: 100%; background: #1e1528; }
+        body {
+            overscroll-behavior: none;           /* no pull-to-refresh / rubber band */
+            touch-action: none;                  /* the game handles every touch */
+            -webkit-user-select: none; user-select: none;
+            -webkit-touch-callout: none;         /* no long-press menu on iPhone */
+            -webkit-tap-highlight-color: transparent;
+        }
+        #potion-rotate {
+            display: none; position: fixed; inset: 0; z-index: 100000; background: #1e1528; color: #fff;
+            align-items: center; justify-content: center; text-align: center;
+            font: 600 20px system-ui, sans-serif; padding: 24px;
+        }
+        @media (orientation: landscape) and (max-height: 500px) { #potion-rotate { display: flex; } }
+    </style>
+    <script src="ads-config.js"></script>
+    <script src="ads.js"></script>
+    <script src="pwa.js"></script>
+    <!-- PWA:END -->
     <!-- Libs and GDJS core files : -->
 		<script src="libs/jshashtable.js" crossorigin="anonymous"></script>
 	<script src="logger.js" crossorigin="anonymous"></script>
@@ -123,6 +148,7 @@
 
 </head>
 <body>
+    <div id="potion-rotate">Turn your phone upright to play Potion Shop.</div>
 
     
 	<script>

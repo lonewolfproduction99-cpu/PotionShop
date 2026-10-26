@@ -105,7 +105,7 @@ gdjs.ShopCode.GDUiTextObjects1= [];
 gdjs.ShopCode.GDUiTextObjects2= [];
 
 
-gdjs.ShopCode.userFunc0xa02858 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fb680 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game data =====
 // Recipes, ingredients, customer types and upgrades are stored in the
@@ -254,7 +254,7 @@ PS.xpForLevel = function (level) {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02948 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fb770 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: utilities =====
 // Math helpers, object helpers and the 3D -> screen projection used to place
@@ -393,7 +393,7 @@ PS.setupCamera = function (runtimeScene) {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02a10 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fb838 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: navigation =====
 // Characters walk on a grid built once at scene start. Blocked cells come from
@@ -610,7 +610,7 @@ PS.goTo = function (ch, x, y) {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02ad8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fb900 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
@@ -789,7 +789,7 @@ PS.Save = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02bf8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fba20 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: shop world =====
 // Builds the shop from the scene instances (tables, cauldrons, waypoints),
@@ -1369,7 +1369,7 @@ PS.FX = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02cd0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fbaf8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: workers and task queue =====
 // Every worker performs one physical task at a time.
@@ -1844,7 +1844,7 @@ PS.Workers = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02da8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fbbd0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: brewing =====
 // Cauldron states: idle -> reserved (ingredients paid, worker on the way)
@@ -2125,7 +2125,7 @@ PS.Stock = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02e80 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fbca8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: interface =====
 // HUD (top), navigation (bottom), panels (brew, orders, ingredients,
@@ -2150,6 +2150,21 @@ PS.UI = {
   },
   H(G) {
     return G.scene.getGame().getGameResolutionHeight();
+  },
+  // Height (game units) hidden by the iPhone home indicator, from the PWA
+  // layer's safe-area probe; 0 elsewhere.
+  safeBottom(G) {
+    const pwa = typeof window !== 'undefined' && window.PotionShopPWA;
+    if (!pwa || !pwa.safeInsets) return 0;
+    const css = pwa.safeInsets().bottom;
+    if (!css) return 0;
+    const canvas = G.scene.getGame().getRenderer().getCanvas();
+    const h = (canvas && canvas.getBoundingClientRect().height) || window.innerHeight;
+    return h ? (css * this.H(G)) / h : 0;
+  },
+  // Bottom of the usable screen area.
+  bottom(G) {
+    return this.H(G) - this.safeBottom(G);
   },
 
   obj(G, name, x, y, layer, list, z) {
@@ -2322,22 +2337,23 @@ PS.UI = {
       ['workers', 'icon_workers', 'Workers'],
       ['expand', 'icon_expand', 'Expand'],
     ];
+    const B = this.bottom(G); // above the iPhone home indicator
     const navH = 118;
-    this.panelBox(G, 'PanelWood', -10, H - navH - 8, W + 20, navH + 24, L, 10);
+    this.panelBox(G, 'PanelWood', -10, B - navH - 8, W + 20, navH + 24 + (H - B), L, 10);
     const bw = (W - 24) / tabs.length;
     hud.tabs = {};
     tabs.forEach(([id, ic, label], i) => {
       const x = 12 + i * bw;
-      const sel = this.panelBox(G, 'BtnGold', x + 4, H - navH + 6, bw - 8, navH - 20, L, 11);
+      const sel = this.panelBox(G, 'BtnGold', x + 4, B - navH + 6, bw - 8, navH - 20, L, 11);
       sel.hide(true);
-      this.icon(G, ic, x + bw / 2, H - navH + 42, 54, L, 'UI', 12);
-      this.text(G, label, x, H - navH + 68, bw, 22, '255;246;226', 'center', L, 'UI', 12, '60;36;20');
+      this.icon(G, ic, x + bw / 2, B - navH + 42, 54, L, 'UI', 12);
+      this.text(G, label, x, B - navH + 68, bw, 22, '255;246;226', 'center', L, 'UI', 12, '60;36;20');
       hud.tabs[id] = sel;
-      this.hit(hud.hits, x, H - navH - 4, bw, navH + 4, () => this.toggle(G, id), 'tab:' + id);
+      this.hit(hud.hits, x, B - navH - 4, bw, navH + 4, () => this.toggle(G, id), 'tab:' + id);
     });
     hud.badge = {};
-    hud.ordersBadge = this.panelBox(G, 'BtnRed', 12 + bw - 46, H - navH - 6, 38, 34, L, 13);
-    hud.ordersBadgeText = this.text(G, '0', 12 + bw - 46, H - navH - 4, 38, 22, '255;255;255', 'center', L, 'UI', 14);
+    hud.ordersBadge = this.panelBox(G, 'BtnRed', 12 + bw - 46, B - navH - 6, 38, 34, L, 13);
+    hud.ordersBadgeText = this.text(G, '0', 12 + bw - 46, B - navH - 4, 38, 22, '255;255;255', 'center', L, 'UI', 14);
   },
 
   updateHud(G) {
@@ -2404,7 +2420,7 @@ PS.UI = {
   frame(G, P, title, h) {
     const W = this.W(G);
     const H = this.H(G);
-    const bottom = H - 126;
+    const bottom = this.bottom(G) - 126;
     const top = Math.max(140, bottom - h);
     P.rect = { x: 8, y: top, w: W - 16, h: bottom - top };
     // Block taps on the panel background.
@@ -2897,31 +2913,39 @@ PS.UI = {
       onTap: () => PS.World.reopen(G, true) && this.close(G),
       onDisabled: () => this.toast(G, 'Not enough gems'),
     });
-    this.button(G, P, area.x, area.y + 362, area.w, 80, 'BtnPurple', 'Watch an ad to reopen (' + PS.Ads.left(G) + ' left today)', {
+    this.button(G, P, area.x, area.y + 362, area.w, 80, PS.Ads.available(G) ? 'BtnPurple' : 'BtnGray',
+      PS.Ads.label(G, 'Watch an ad to reopen'), {
       tag: 'reopenAd',
       icon: 'icon_ad',
       size: 24,
-      disabled: PS.Ads.left(G) <= 0,
+      disabled: !PS.Ads.available(G),
       onTap: () => PS.Ads.watch(G, 'Reopen the shop', () => {
         G.state.closed = false;
         G.state.satisfaction = 55;
+        G.spawnTimer = 2;
         G.saveNow();
-      }),
-      onDisabled: () => this.toast(G, 'No more ads today'),
+      }, 'reopen_shop'),
+      onDisabled: () => this.toast(G, PS.Ads.unavailableText(G)),
     });
   },
 
-  // ----- Rewarded ad placeholder (real ads come with the mobile app build).
+  // ----- Rewarded ad. While the ad adapter shows a real ad this panel only
+  // says so; in the GDevelop preview (no adapter) it is a labelled test ad.
   buildAd(G, P) {
-    const area = this.frame(G, P, 'Watch an ad', 700);
+    const area = this.frame(G, P, P.params.preview ? 'Test ad (preview)' : 'Rewarded ad', 600);
+    this.text(G, 'Reward: ' + P.params.reason, area.x, area.y + 10, area.w, 26, COLORS.ink, 'center', P.items, 'UI', 17);
+    if (!P.params.preview) {
+      this.text(G, 'Showing the ad...\nThe reward is given when the ad is finished.', area.x, area.y + 90, area.w, 26,
+        COLORS.muted, 'center', P.items, 'UI', 17);
+      return;
+    }
     const left = Math.max(0, (P.params.until - Date.now()) / 1000);
-    this.panelBox(G, 'PanelDark', area.x, area.y, area.w, 300, P.items, 16);
-    this.text(G, 'Advertisement', area.x, area.y + 40, area.w, 36, '255;255;255', 'center', P.items, 'UI', 17);
-    this.text(G, 'In the app version a short video ad plays here.\nThis web build shows a placeholder.', area.x + 20,
-      area.y + 110, area.w - 40, 24, '220;220;230', 'center', P.items, 'UI', 17);
+    this.panelBox(G, 'PanelDark', area.x, area.y + 60, area.w, 230, P.items, 16);
+    this.text(G, 'GDEVELOP PREVIEW TEST AD', area.x, area.y + 90, area.w, 32, '255;120;110', 'center', P.items, 'UI', 17);
+    this.text(G, 'Not a real ad. Exported builds use the ad adapter instead.', area.x + 20, area.y + 140, area.w - 40, 22,
+      '220;220;230', 'center', P.items, 'UI', 17);
     this.text(G, left > 0 ? Math.ceil(left) + '' : '', area.x, area.y + 200, area.w, 48, COLORS.gold, 'center', P.items, 'UI', 17);
-    this.text(G, 'Reward: ' + P.params.reason, area.x, area.y + 320, area.w, 26, COLORS.ink, 'center', P.items, 'UI', 17);
-    this.button(G, P, area.x + area.w / 2 - 170, area.y + 370, 340, 80, left > 0 ? 'BtnGray' : 'BtnGreen', 'Claim reward', {
+    this.button(G, P, area.x + area.w / 2 - 170, area.y + 320, 340, 80, left > 0 ? 'BtnGray' : 'BtnGreen', 'Claim reward', {
       tag: 'claimAd',
       icon: 'icon_check',
       size: 30,
@@ -3674,7 +3698,7 @@ PS.Input = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02f58 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fbd80 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game state, progression and main loop =====
 const PS = gdjs.PotionShop;
@@ -3712,9 +3736,11 @@ PS.Audio = {
   },
 };
 
-// Rewarded ads with a daily limit. This web build shows a short placeholder;
-// the mobile app build will plug the real ad provider in here (show the ad,
-// then call the reward on success).
+// Rewarded ads with a daily limit. The real ad work is done by the ad adapter
+// (window.PotionAds, pwa/ads.js, added to the HTML5 export by
+// tools/pwa/apply_pwa.py). The reward is only given when the adapter reports
+// that the ad provider confirmed it. Without the adapter (GDevelop preview) a
+// clearly labelled test panel is used instead.
 PS.Ads = {
   today() {
     return new Date().toISOString().slice(0, 10);
@@ -3727,17 +3753,80 @@ PS.Ads = {
   left(G) {
     return Math.max(0, PS.data.balance.adDailyLimit - this.state(G).count);
   },
-  watch(G, reason, onReward) {
-    if (this.left(G) <= 0) {
-      PS.UI.toast(G, 'No more ads today, come back tomorrow');
+  adapter() {
+    return typeof window !== 'undefined' ? window.PotionAds : null;
+  },
+  preview(G) {
+    return !this.adapter() && G.scene.getGame().isPreview();
+  },
+  // Can an ad be requested now? (Buttons are disabled otherwise.)
+  available(G) {
+    if (this.left(G) <= 0) return false;
+    const A = this.adapter();
+    return A ? A.isAvailable() : this.preview(G);
+  },
+  // Short reason shown when ads cannot be watched.
+  unavailableText(G) {
+    if (this.left(G) <= 0) return 'No more ads today, come back tomorrow';
+    const A = this.adapter();
+    const st = A ? A.status() : 'no-provider';
+    if (st === 'offline') return 'You are offline: ads need an internet connection';
+    if (st === 'no-provider') return 'Ads are not available in this version';
+    if (st === 'loading') return 'Ads are still loading, try again in a moment';
+    return 'No ad is available right now, try again later';
+  },
+  // Button label suffix: "(3 left today)" or why ads are unavailable.
+  label(G, text) {
+    if (this.available(G)) return text + ' (' + this.left(G) + ' left today)';
+    return text + ' (unavailable)';
+  },
+  watch(G, reason, onReward, placement) {
+    if (!this.available(G)) {
+      PS.UI.toast(G, this.unavailableText(G));
       return false;
     }
-    PS.UI.open(G, 'ad', { reason, onReward, until: Date.now() + 3000 }); // real seconds, like a video
+    const A = this.adapter();
+    if (!A) {
+      // GDevelop preview only: a labelled test panel, never shown in exported builds.
+      PS.UI.open(G, 'ad', { reason, onReward, preview: true, until: Date.now() + 3000 });
+      return true;
+    }
+    PS.UI.open(G, 'ad', { reason, waiting: true });
+    A.showRewardedAd(placement || 'reward').then((res) => {
+      if (G.ui.panel && G.ui.panel.name === 'ad') PS.UI.close(G);
+      if (res.rewarded) {
+        this.claim(G);
+        onReward();
+        PS.Audio.play(G.shop || G, 'coin');
+        PS.UI.toast(G, 'Reward earned!');
+      } else {
+        PS.UI.toast(G, res.reason === 'dismissed' || res.reason === 'closed-early' || res.reason === 'not-completed'
+          ? 'Ad closed early: no reward' : 'No ad could be shown, no reward this time');
+      }
+    });
     return true;
   },
   claim(G) {
     this.state(G).count += 1;
     (G.shop || G).requestSave();
+  },
+  // While an ad is on screen the shop pauses and the sound is muted.
+  hookPause(G) {
+    const A = this.adapter();
+    if (!A || A._potionHooked) return;
+    A._potionHooked = true;
+    let volume = 100;
+    A._pauseGame = (on) => {
+      if (!!PS.adPlaying === !!on) return;
+      PS.adPlaying = !!on;
+      const sm = PS.game.scene.getGame().getSoundManager();
+      if (on) {
+        volume = sm.getGlobalVolume();
+        sm.setGlobalVolume(0);
+      } else {
+        sm.setGlobalVolume(volume);
+      }
+    };
   },
 };
 
@@ -3765,6 +3854,7 @@ PS.Game = class {
     this.setShadows(this.settings.shadows);
     PS.Tutorial.init(this);
     PS.Audio.music(this);
+    PS.Ads.hookPause(this);
     this.checkOffline();
     this.incomeTimer = 0;
     this.earnedMark = this.state.earned;
@@ -4018,7 +4108,8 @@ PS.Game = class {
     PS.proj.scene = this.scene; // the garden scene may have changed it
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     // PS.simSteps > 1 runs the simulation several times per frame (automated tests only).
-    const steps = PS.simSteps || 1;
+    // Paused while a rewarded ad is on screen.
+    const steps = PS.adPlaying ? 0 : PS.simSteps || 1;
     for (let i = 0; i < steps; i++) {
       this.time += dt;
       PS.World.updateCustomers(this, dt);
@@ -4042,7 +4133,7 @@ PS.Game = class {
 };
 
 };
-gdjs.ShopCode.userFunc0xa03030 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fbe58 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: first-time tutorial =====
 // A bouncing hand points at what to tap next and a banner explains it. The
@@ -4314,7 +4405,7 @@ PS.Tutorial = {
     if (s && s.world) target = PS.proj.toScreen(s.world[0], s.world[1], s.world[2]);
     else if (s && s.screen) target = s.screen;
     // The banner sits above the bottom bar, or at the top when it would cover the target.
-    const top = !!(target && target[1] > H - 330);
+    const top = !!(target && target[1] > UI.bottom(G) - 330);
     const key = s ? s.text + '|' + (s.next || '') + '|' + top : '';
     if (key !== T.last) {
       // Rebuild the banner when the message changes.
@@ -4325,7 +4416,7 @@ PS.Tutorial = {
       T.skip = null;
       T.next = null;
       if (!s) return;
-      const y = top ? 140 : H - 126 - 116;
+      const y = top ? 140 : UI.bottom(G) - 126 - 116;
       UI.panelBox(G, 'PanelDark', 14, y, W - 28, 108, T.items, 50);
       UI.icon(G, 'icon_book', 52, y + 54, 52, T.items, 'UI', 51);
       UI.text(G, s.text, 86, y + 10, W - 226, 21, '255;255;255', 'left', T.items, 'UI', 51);
@@ -4372,7 +4463,7 @@ PS.Tutorial = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa03108 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9fbf30 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // Create the game once the systems above are defined.
 const PS = gdjs.PotionShop;
@@ -4391,7 +4482,7 @@ gdjs.ShopCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.ShopCode.userFunc0xa02858(runtimeScene);
+gdjs.ShopCode.userFunc0x9fb680(runtimeScene);
 
 }
 
@@ -4399,7 +4490,7 @@ gdjs.ShopCode.userFunc0xa02858(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02948(runtimeScene);
+gdjs.ShopCode.userFunc0x9fb770(runtimeScene);
 
 }
 
@@ -4407,7 +4498,7 @@ gdjs.ShopCode.userFunc0xa02948(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02a10(runtimeScene);
+gdjs.ShopCode.userFunc0x9fb838(runtimeScene);
 
 }
 
@@ -4415,7 +4506,7 @@ gdjs.ShopCode.userFunc0xa02a10(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02ad8(runtimeScene);
+gdjs.ShopCode.userFunc0x9fb900(runtimeScene);
 
 }
 
@@ -4423,7 +4514,7 @@ gdjs.ShopCode.userFunc0xa02ad8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02bf8(runtimeScene);
+gdjs.ShopCode.userFunc0x9fba20(runtimeScene);
 
 }
 
@@ -4431,7 +4522,7 @@ gdjs.ShopCode.userFunc0xa02bf8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02cd0(runtimeScene);
+gdjs.ShopCode.userFunc0x9fbaf8(runtimeScene);
 
 }
 
@@ -4439,7 +4530,7 @@ gdjs.ShopCode.userFunc0xa02cd0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02da8(runtimeScene);
+gdjs.ShopCode.userFunc0x9fbbd0(runtimeScene);
 
 }
 
@@ -4447,7 +4538,7 @@ gdjs.ShopCode.userFunc0xa02da8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02e80(runtimeScene);
+gdjs.ShopCode.userFunc0x9fbca8(runtimeScene);
 
 }
 
@@ -4455,7 +4546,7 @@ gdjs.ShopCode.userFunc0xa02e80(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02f58(runtimeScene);
+gdjs.ShopCode.userFunc0x9fbd80(runtimeScene);
 
 }
 
@@ -4463,7 +4554,7 @@ gdjs.ShopCode.userFunc0xa02f58(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa03030(runtimeScene);
+gdjs.ShopCode.userFunc0x9fbe58(runtimeScene);
 
 }
 
@@ -4471,12 +4562,12 @@ gdjs.ShopCode.userFunc0xa03030(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa03108(runtimeScene);
+gdjs.ShopCode.userFunc0x9fbf30(runtimeScene);
 
 }
 
 
-};gdjs.ShopCode.userFunc0x94b300 = function GDJSInlineCode(runtimeScene) {
+};gdjs.ShopCode.userFunc0x9fc030 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const game = runtimeScene.__potionShop;
 if (game) game.update();
@@ -4502,7 +4593,7 @@ gdjs.ShopCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.ShopCode.userFunc0x94b300(runtimeScene);
+gdjs.ShopCode.userFunc0x9fc030(runtimeScene);
 
 }
 

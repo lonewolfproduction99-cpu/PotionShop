@@ -1,0 +1,12 @@
+# Cloudflare Pages headers for the Potion Shop PWA.
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/ads-config.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache
+/*.glb
+  Content-Type: model/gltf-binary
