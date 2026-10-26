@@ -105,7 +105,7 @@ gdjs.ShopCode.GDUiTextObjects1= [];
 gdjs.ShopCode.GDUiTextObjects2= [];
 
 
-gdjs.ShopCode.userFunc0xa02878 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f7c48 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game data =====
 // Recipes, ingredients, customer types and upgrades are stored in the
@@ -254,7 +254,7 @@ PS.xpForLevel = function (level) {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02968 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f7d38 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: utilities =====
 // Math helpers, object helpers and the 3D -> screen projection used to place
@@ -393,7 +393,7 @@ PS.setupCamera = function (runtimeScene) {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02a30 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f7e00 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: navigation =====
 // Characters walk on a grid built once at scene start. Blocked cells come from
@@ -610,7 +610,7 @@ PS.goTo = function (ch, x, y) {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02af8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f7ec8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
@@ -705,7 +705,8 @@ PS.Save = {
       s.garden = raw.garden.slice(0, 16).map((p) => ({
         herb: p && PS.data.ingredientById[p.herb] ? p.herb : null,
         readyAt: num(p && p.readyAt, 0, 0, 1e15),
-        planted: !!(p && p.planted),
+        // Older saves had no `planted` flag: their plots were always growing.
+        planted: p && p.planted !== undefined ? !!p.planted : !!(p && PS.data.ingredientById[p.herb]),
       }));
     }
     s.gems = Math.floor(num(raw.gems, 0, 0, 1e9));
@@ -786,7 +787,7 @@ PS.Save = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02c18 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f7fd0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: shop world =====
 // Builds the shop from the scene instances (tables, cauldrons, waypoints),
@@ -1364,7 +1365,7 @@ PS.FX = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02cf0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f80a8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: workers and task queue =====
 // Every worker performs one physical task at a time.
@@ -1839,7 +1840,7 @@ PS.Workers = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02dc8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f8180 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: brewing =====
 // Cauldron states: idle -> reserved (ingredients paid, worker on the way)
@@ -2120,7 +2121,7 @@ PS.Stock = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02ea0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f8258 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: interface =====
 // HUD (top), navigation (bottom), panels (brew, orders, ingredients,
@@ -3669,7 +3670,7 @@ PS.Input = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa02f78 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f8330 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game state, progression and main loop =====
 const PS = gdjs.PotionShop;
@@ -4037,7 +4038,7 @@ PS.Game = class {
 };
 
 };
-gdjs.ShopCode.userFunc0xa03050 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f8408 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: first-time tutorial =====
 // Guides a new player through the first order: a bouncing hand points at
@@ -4144,7 +4145,7 @@ PS.Tutorial = {
 };
 
 };
-gdjs.ShopCode.userFunc0xa03128 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f84e0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // Create the game once the systems above are defined.
 const PS = gdjs.PotionShop;
@@ -4163,7 +4164,7 @@ gdjs.ShopCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.ShopCode.userFunc0xa02878(runtimeScene);
+gdjs.ShopCode.userFunc0x9f7c48(runtimeScene);
 
 }
 
@@ -4171,7 +4172,7 @@ gdjs.ShopCode.userFunc0xa02878(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02968(runtimeScene);
+gdjs.ShopCode.userFunc0x9f7d38(runtimeScene);
 
 }
 
@@ -4179,7 +4180,7 @@ gdjs.ShopCode.userFunc0xa02968(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02a30(runtimeScene);
+gdjs.ShopCode.userFunc0x9f7e00(runtimeScene);
 
 }
 
@@ -4187,7 +4188,7 @@ gdjs.ShopCode.userFunc0xa02a30(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02af8(runtimeScene);
+gdjs.ShopCode.userFunc0x9f7ec8(runtimeScene);
 
 }
 
@@ -4195,7 +4196,7 @@ gdjs.ShopCode.userFunc0xa02af8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02c18(runtimeScene);
+gdjs.ShopCode.userFunc0x9f7fd0(runtimeScene);
 
 }
 
@@ -4203,7 +4204,7 @@ gdjs.ShopCode.userFunc0xa02c18(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02cf0(runtimeScene);
+gdjs.ShopCode.userFunc0x9f80a8(runtimeScene);
 
 }
 
@@ -4211,7 +4212,7 @@ gdjs.ShopCode.userFunc0xa02cf0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02dc8(runtimeScene);
+gdjs.ShopCode.userFunc0x9f8180(runtimeScene);
 
 }
 
@@ -4219,7 +4220,7 @@ gdjs.ShopCode.userFunc0xa02dc8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02ea0(runtimeScene);
+gdjs.ShopCode.userFunc0x9f8258(runtimeScene);
 
 }
 
@@ -4227,7 +4228,7 @@ gdjs.ShopCode.userFunc0xa02ea0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa02f78(runtimeScene);
+gdjs.ShopCode.userFunc0x9f8330(runtimeScene);
 
 }
 
@@ -4235,7 +4236,7 @@ gdjs.ShopCode.userFunc0xa02f78(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa03050(runtimeScene);
+gdjs.ShopCode.userFunc0x9f8408(runtimeScene);
 
 }
 
@@ -4243,12 +4244,12 @@ gdjs.ShopCode.userFunc0xa03050(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0xa03128(runtimeScene);
+gdjs.ShopCode.userFunc0x9f84e0(runtimeScene);
 
 }
 
 
-};gdjs.ShopCode.userFunc0x8e6818 = function GDJSInlineCode(runtimeScene) {
+};gdjs.ShopCode.userFunc0x9f86c0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const game = runtimeScene.__potionShop;
 if (game) game.update();
@@ -4274,7 +4275,7 @@ gdjs.ShopCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.ShopCode.userFunc0x8e6818(runtimeScene);
+gdjs.ShopCode.userFunc0x9f86c0(runtimeScene);
 
 }
 

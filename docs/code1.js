@@ -73,7 +73,7 @@ gdjs.GardenCode.GDUiTextObjects1= [];
 gdjs.GardenCode.GDUiTextObjects2= [];
 
 
-gdjs.GardenCode.userFunc0x9f8730 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0x9ef3b0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 if (gdjs.PotionShop && gdjs.PotionShop.util) {
 // ===== Potion Shop: herb garden =====
@@ -128,6 +128,7 @@ PS.Garden = class {
       if (!st.garden[i]) st.garden[i] = { herb: p.isWell ? 'moonwater' : null, readyAt: Date.now(), planted: p.isWell };
       p.state = st.garden[i];
       if (p.isWell) {
+        // Saves from before Milestone 6 had no `planted` flag: the well always grows Moonwater.
         p.state.herb = 'moonwater';
         p.state.planted = true;
       }
@@ -475,7 +476,7 @@ PS.GardenUI = {
 }
 
 };
-gdjs.GardenCode.userFunc0xa02878 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0x9f9518 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // The garden needs the shop systems: start from the shop if they are missing.
 const PS = gdjs.PotionShop;
@@ -491,7 +492,7 @@ gdjs.GardenCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.GardenCode.userFunc0x9f8730(runtimeScene);
+gdjs.GardenCode.userFunc0x9ef3b0(runtimeScene);
 
 }
 
@@ -499,12 +500,12 @@ gdjs.GardenCode.userFunc0x9f8730(runtimeScene);
 {
 
 
-gdjs.GardenCode.userFunc0xa02878(runtimeScene);
+gdjs.GardenCode.userFunc0x9f9518(runtimeScene);
 
 }
 
 
-};gdjs.GardenCode.userFunc0x9fb6a0 = function GDJSInlineCode(runtimeScene) {
+};gdjs.GardenCode.userFunc0x9f3ce0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const garden = runtimeScene.__garden;
 if (garden) garden.update();
@@ -530,7 +531,7 @@ gdjs.GardenCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.GardenCode.userFunc0x9fb6a0(runtimeScene);
+gdjs.GardenCode.userFunc0x9f3ce0(runtimeScene);
 
 }
 
