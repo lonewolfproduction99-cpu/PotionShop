@@ -21,6 +21,16 @@ gdjs.GardenCode.GDPlantStarbloomObjects1= [];
 gdjs.GardenCode.GDPlantStarbloomObjects2= [];
 gdjs.GardenCode.GDPlantGlowcapObjects1= [];
 gdjs.GardenCode.GDPlantGlowcapObjects2= [];
+gdjs.GardenCode.GDPlantFrostberryObjects1= [];
+gdjs.GardenCode.GDPlantFrostberryObjects2= [];
+gdjs.GardenCode.GDPlantEmberpepperObjects1= [];
+gdjs.GardenCode.GDPlantEmberpepperObjects2= [];
+gdjs.GardenCode.GDPlantShadowmossObjects1= [];
+gdjs.GardenCode.GDPlantShadowmossObjects2= [];
+gdjs.GardenCode.GDPlantLuckycloverObjects1= [];
+gdjs.GardenCode.GDPlantLuckycloverObjects2= [];
+gdjs.GardenCode.GDPlantDragonscaleObjects1= [];
+gdjs.GardenCode.GDPlantDragonscaleObjects2= [];
 gdjs.GardenCode.GDBubbleObjects1= [];
 gdjs.GardenCode.GDBubbleObjects2= [];
 gdjs.GardenCode.GDNavBlockObjects1= [];
@@ -63,13 +73,18 @@ gdjs.GardenCode.GDUiTextObjects1= [];
 gdjs.GardenCode.GDUiTextObjects2= [];
 
 
-gdjs.GardenCode.userFunc0x949b30 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0x9f8730 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 if (gdjs.PotionShop && gdjs.PotionShop.util) {
 // ===== Potion Shop: herb garden =====
-// An optional scene pushed on top of the (paused) shop. Plots grow herbs over
-// real time; tap a ripe plant to gather it (circular progress), rare herbs
-// glow. The well gives Moonwater. Herbs go straight to the shop's pantry.
+// An optional scene pushed on top of the (paused) shop.
+// - Tap an empty plot to choose a herb to plant (costs a few gold for seeds).
+// - Herbs grow over real time; rarer herbs take longer. Growing plots can be
+//   finished early with gems, gold or a rewarded ad (daily limit).
+// - Tap a ripe plant to harvest it (circular progress). Harvests sometimes
+//   drop a special herb (Starbloom or Glowcap).
+// - The well gives Moonwater and refills by itself.
+// Herbs go straight to the shop's pantry.
 const PS = gdjs.PotionShop;
 const U = PS.util;
 
@@ -82,6 +97,11 @@ PS.GARDEN_PLANTS = {
   swiftmint: 'PlantSwiftmint',
   starbloom: 'PlantStarbloom',
   glowcap: 'PlantGlowcap',
+  frostberry: 'PlantFrostberry',
+  emberpepper: 'PlantEmberpepper',
+  shadowmoss: 'PlantShadowmoss',
+  luckyclover: 'PlantLuckyclover',
+  dragonscale: 'PlantDragonscale',
 };
 
 PS.Garden = class {
@@ -90,44 +110,61 @@ PS.Garden = class {
     this.shop = PS.game; // the paused shop game: its pantry and save
     this.time = 0;
     this.fx = [];
-    this.ui = { hud: { items: [], hits: [] }, panel: null, floats: [], toast: null, wasDown: false };
+    this.ui = { hud: { items: [], hits: [] }, panel: null, floats: [], toast: null, wasDown: false, scroll: 0,
+      refreshTimer: 0, dirty: false };
     this.gathering = null;
     this.waiting = [];
     PS.proj.scene = scene;
     PS.setupCamera(scene);
-    const st = this.shop.state;
+    const st = this.state;
     this.plots = scene
       .getObjects('Plot')
       .map((o) => ({ obj: o, order: PS.varNum(o, 'Order', 0), x: o.getX(), y: o.getY(), isWell: false }))
       .sort((a, b) => a.order - b.order);
     const well = scene.getObjects('Waypoint').find((w) => PS.varStr(w, 'Kind', '') === 'well');
     if (well) this.plots.push({ obj: null, x: well.getX(), y: well.getY(), isWell: true });
-    // Restore or create plot states (stored with the shop's save).
-    const now = Date.now();
+    // Restore plot states (stored with the shop's save). Plots start empty.
     this.plots.forEach((p, i) => {
-      if (!st.garden[i]) st.garden[i] = { herb: p.isWell ? 'moonwater' : this.rollHerb(), readyAt: now };
+      if (!st.garden[i]) st.garden[i] = { herb: p.isWell ? 'moonwater' : null, readyAt: Date.now(), planted: p.isWell };
       p.state = st.garden[i];
-      if (p.isWell) p.state.herb = 'moonwater';
+      if (p.isWell) {
+        p.state.herb = 'moonwater';
+        p.state.planted = true;
+      }
       this.makePlant(p);
     });
     this.buildHud();
   }
 
-  // Herbs that can grow: unlocked garden herbs, sometimes a rare one.
-  rollHerb() {
-    const b = PS.data.balance;
-    if (Math.random() < b.gardenRareChance) return Math.random() < 0.5 ? 'starbloom' : 'glowcap';
-    const level = this.shop.state.level;
-    const pool = PS.data.ingredients.filter(
-      (i) => !i.rare && PS.GARDEN_PLANTS[i.id] && i.unlockLevel <= level
+  // The shop's state and settings (so shared interface code works here too).
+  get state() {
+    return this.shop.state;
+  }
+  get settings() {
+    return this.shop.settings;
+  }
+  prestige() {
+    return this.shop.prestige();
+  }
+
+  // Herbs that can be planted: unlocked, not rare.
+  plantable() {
+    const s = this.state;
+    return PS.data.ingredients.filter(
+      (i) => !i.rare && PS.GARDEN_PLANTS[i.id] && i.unlockLevel <= s.level && i.prestige <= s.prestige
     );
-    return U.pick(pool).id;
+  }
+  growTime(herbId) {
+    return PS.data.ingredientById[herbId].growTime;
+  }
+  seedCost(ing) {
+    return Math.max(1, Math.round(ing.cost * 2 * this.shop.herbCostMult()));
   }
 
   makePlant(p) {
     if (p.plant) PS.destroy(p.plant);
     p.plant = null;
-    if (p.isWell) return;
+    if (p.isWell || !p.state.planted || !p.state.herb) return;
     p.plant = PS.create(this.scene, PS.GARDEN_PLANTS[p.state.herb], p.x, p.y, '');
     p.plant.setZ(6);
     p.plant.setAngle(U.rand(-30, 30));
@@ -136,9 +173,50 @@ PS.Garden = class {
     p.baseD = p.plant.getDepth();
   }
 
+  // 0..1 growth, or -1 for an empty plot.
   growth(p) {
+    if (!p.state.planted) return -1;
+    const total = (p.isWell ? PS.data.balance.gardenRegrow : this.growTime(p.state.herb)) * 1000;
     const left = p.state.readyAt - Date.now();
-    return U.clamp(1 - left / (PS.data.balance.gardenRegrow * 1000), 0, 1);
+    return U.clamp(1 - left / total, 0, 1);
+  }
+  secondsLeft(p) {
+    return Math.max(0, (p.state.readyAt - Date.now()) / 1000);
+  }
+
+  plant(p, ing) {
+    const cost = this.seedCost(ing);
+    if (this.state.gold < cost) {
+      PS.UI.toast(this, 'Not enough gold for seeds');
+      return false;
+    }
+    this.shop.addGold(-cost);
+    p.state.herb = ing.id;
+    p.state.planted = true;
+    p.state.readyAt = Date.now() + this.growTime(ing.id) * 1000;
+    this.makePlant(p);
+    PS.FX.sparkleAt(this, p.x, p.y, 10);
+    PS.Audio.play(this, 'pluck');
+    this.shop.requestSave();
+    return true;
+  }
+
+  // Speed-ups for a growing plot.
+  finishNow(p) {
+    p.state.readyAt = Date.now();
+    PS.FX.sparkleAt(this, p.x, p.y, 20);
+    this.shop.requestSave();
+  }
+  gemCost(p) {
+    return Math.max(1, Math.ceil(this.secondsLeft(p) / 60));
+  }
+  goldCost(p) {
+    const ing = PS.data.ingredientById[p.state.herb];
+    return Math.max(5, Math.ceil(this.secondsLeft(p) / 30) * this.seedCost(ing));
+  }
+  halveTime(p) {
+    p.state.readyAt = Date.now() + (this.secondsLeft(p) * 1000) / 2;
+    this.shop.requestSave();
   }
 
   buildHud() {
@@ -148,9 +226,13 @@ PS.Garden = class {
     const H = UI.H(this);
     UI.panelBox(this, 'PanelWood', 12, 12, W - 24, 112, L, 10);
     UI.icon(this, 'icon_garden', 64, 66, 64, L, 'UI', 11);
-    UI.text(this, 'Herb Garden', 110, 28, W - 150, 38, '58;36;24', 'left', L, 'UI', 11);
-    UI.text(this, 'Tap ripe plants to gather. Rare herbs glow! Plants regrow over time.', 110, 72, W - 150, 20,
-      '140;110;84', 'left', L, 'UI', 11);
+    UI.text(this, 'Herb Garden', 110, 24, 300, 38, '58;36;24', 'left', L, 'UI', 11);
+    UI.text(this, 'Tap a plot to plant. Rarer herbs grow slower. Harvests may drop special herbs!', 110, 70, W - 150,
+      20, '140;110;84', 'left', L, 'UI', 11);
+    UI.icon(this, 'icon_coin', W - 230, 42, 32, L, 'UI', 11);
+    this.goldText = UI.text(this, '0', W - 210, 28, 90, 26, '170;120;20', 'left', L, 'UI', 11);
+    UI.icon(this, 'icon_quality', W - 110, 42, 30, L, 'UI', 11);
+    this.gemText = UI.text(this, '0', W - 90, 28, 70, 26, '60;110;160', 'left', L, 'UI', 11);
     const P = { items: L, hits: this.ui.hud.hits };
     UI.button(this, P, W / 2 - 170, H - 120, 340, 92, 'BtnBlue', 'Back to the shop', {
       tag: 'back',
@@ -159,9 +241,9 @@ PS.Garden = class {
       size: 32,
       onTap: () => this.leave(),
     });
-    // Pantry counts for gatherable herbs
+    // Pantry counts for garden herbs
     this.counts = [];
-    const ids = Object.keys(PS.GARDEN_PLANTS).concat(['moonwater']);
+    const ids = this.plantable().map((i) => i.id).concat(['moonwater', 'starbloom', 'glowcap']).slice(0, 10);
     const cw = (W - 24) / ids.length;
     ids.forEach((id, i) => {
       const x = 12 + i * cw;
@@ -172,15 +254,13 @@ PS.Garden = class {
   }
 
   leave() {
+    PS.UI.close(this);
     this.shop.saveNow();
     this.scene.requestChange(gdjs.SceneChangeRequest.POP_SCENE);
   }
 
-  tap(x, y) {
-    for (let i = this.ui.hud.hits.length - 1; i >= 0; i--) {
-      const h = this.ui.hud.hits[i];
-      if (PS.UI.inside(h, x, y)) return h.fn();
-    }
+  // Taps that are not on the interface (called by PS.UI.tap).
+  worldTap(x, y) {
     let best = null;
     let bestD = 85;
     for (const p of this.plots) {
@@ -193,14 +273,16 @@ PS.Garden = class {
       }
     }
     if (!best) return;
-    if (this.growth(best) < 1) {
-      PS.UI.toast(this, 'Still growing: ready in ' + U.formatTime((best.state.readyAt - Date.now()) / 1000));
-      return;
+    const g = this.growth(best);
+    if (g < 0) return PS.UI.open(this, 'plant', { plot: best });
+    if (g < 1) {
+      if (best.isWell) return PS.UI.toast(this, 'The well refills in ' + U.formatTime(this.secondsLeft(best)));
+      return PS.UI.open(this, 'speedup', { plot: best });
     }
     if (this.gathering === best || this.waiting.includes(best)) return;
     if (this.gathering) this.waiting.push(best);
     else this.startGather(best);
-    PS.Audio.play(this.shop, 'tap');
+    PS.Audio.play(this, 'tap');
   }
 
   startGather(p) {
@@ -210,55 +292,49 @@ PS.Garden = class {
   }
 
   finishGather(p) {
-    const st = this.shop.state;
+    const st = this.state;
     const herb = PS.data.ingredientById[p.state.herb];
-    const amount = herb.rare ? 1 : 2 + (st.level >= 5 ? 1 : 0);
     const cap = this.shop.storageCap();
     const have = st.inventory[herb.id] || 0;
     if (have >= cap) {
       PS.UI.toast(this, 'Pantry is full of ' + herb.name);
       return;
     }
+    const amount = p.isWell ? 2 : 4 + (st.level >= 8 ? 1 : 0);
     const got = Math.min(amount, cap - have);
     st.inventory[herb.id] = have + got;
     PS.UI.floatText(this, p.x, p.y, 60, '+' + got + ' ' + herb.name, herb.icon);
     PS.FX.sparkleAt(this, p.x, p.y, 30);
-    PS.Audio.play(this.shop, herb.rare ? 'levelup' : 'pluck');
-    p.state.readyAt = Date.now() + PS.data.balance.gardenRegrow * 1000;
-    if (!p.isWell) {
-      p.state.herb = this.rollHerb();
+    PS.Audio.play(this, 'pluck');
+    // A lucky harvest leaves a special herb behind.
+    if (!p.isWell && Math.random() < PS.data.balance.harvestRareChance) {
+      const rare = PS.data.ingredientById[Math.random() < 0.5 ? 'starbloom' : 'glowcap'];
+      if ((st.inventory[rare.id] || 0) < cap) {
+        st.inventory[rare.id] = (st.inventory[rare.id] || 0) + 1;
+        PS.UI.floatText(this, p.x, p.y, 100, 'Special herb: ' + rare.name + '!', rare.icon);
+        PS.Audio.play(this, 'levelup');
+      }
+    }
+    if (p.isWell) {
+      p.state.readyAt = Date.now() + PS.data.balance.gardenRegrow * 1000;
+    } else {
+      p.state.planted = false;
+      p.state.herb = null;
       this.makePlant(p);
     }
     this.shop.requestSave();
-  }
-
-  handleInput() {
-    const im = this.scene.getGame().getInputManager();
-    const down = im.isMouseButtonPressed(0);
-    const released = im.isMouseButtonReleased(0);
-    const pt = this.scene.getLayer('UI').convertCoords(im.getCursorX(), im.getCursorY(), 0);
-    if (down && !this.ui.wasDown) {
-      this.pressX = pt[0];
-      this.pressY = pt[1];
-    }
-    if (!down && (this.ui.wasDown || released)) {
-      if (this.ui.wasDown) this.tap(this.pressX, this.pressY);
-      else this.tap(pt[0], pt[1]);
-    }
-    this.ui.wasDown = down;
   }
 
   update() {
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     this.time += dt;
     PS.proj.scene = this.scene;
-    this.handleInput();
-    // Plant growth, ripe sparkle and timers
+    PS.UI.handleInput(this);
     for (const p of this.plots) {
       const g = this.growth(p);
       p.ui = p.ui || {};
       if (p.plant) {
-        const s = 0.3 + 0.7 * g;
+        const s = 0.3 + 0.7 * Math.max(0, g);
         const bob = g >= 1 ? 1 + 0.04 * Math.sin(this.time * 4 + p.x) : 1;
         p.plant.setWidth(p.baseW * s);
         p.plant.setHeight(p.baseH * s);
@@ -268,22 +344,19 @@ PS.Garden = class {
       const tag = PS.UI.ensure(this, p.ui, 'tag', 'Icon', 3);
       const txt = PS.UI.ensure(this, p.ui, 'txt', 'UiText', 4);
       if (!scr) continue;
-      if (g >= 1) {
+      if (g >= 1 || g < 0) {
         txt.hide(true);
         tag.hide(false);
-        const herb = PS.data.ingredientById[p.state.herb];
-        tag.setAnimationName(herb.icon);
-        const sz = 42 + 4 * Math.sin(this.time * 5 + p.x);
+        const sz = g < 0 ? 34 : 42 + 4 * Math.sin(this.time * 5 + p.x);
+        tag.setAnimationName(g < 0 ? 'icon_plus' : PS.data.ingredientById[p.state.herb].icon);
+        tag.setOpacity(g < 0 ? 200 : 255);
         tag.setWidth(sz);
         tag.setHeight(sz);
         tag.setPosition(scr[0] - sz / 2, scr[1] - sz / 2);
-        if (herb.rare && Math.random() < dt * 3) {
-          PS.FX.bubble(this, p.x + U.rand(-20, 20), p.y + U.rand(-20, 20), 30, '255;240;160', 30, 0.8, 4);
-        }
       } else {
         tag.hide(true);
         txt.hide(false);
-        txt.setText(U.formatTime((p.state.readyAt - Date.now()) / 1000));
+        txt.setText(U.formatTime(this.secondsLeft(p)));
         txt.setCharacterSize(22);
         txt.setColor('255;255;255');
         txt.setOutlineEnabled(true);
@@ -295,7 +368,7 @@ PS.Garden = class {
         txt.setPosition(scr[0] - 50, scr[1] - 14);
       }
     }
-    // Gathering with a circular progress ring
+    // Harvesting with a circular progress ring
     const p = this.gathering;
     if (p) {
       p.t += dt;
@@ -307,16 +380,102 @@ PS.Garden = class {
         if (this.waiting.length) this.startGather(this.waiting.shift());
       }
     }
-    for (const [id, t] of this.counts) t.setText(String(this.shop.state.inventory[id] || 0));
+    for (const [id, t] of this.counts) t.setText(String(this.state.inventory[id] || 0));
+    this.goldText.setText(U.formatGold(this.state.gold));
+    this.gemText.setText(U.formatGold(this.state.gems));
     PS.FX.update(this, dt);
     PS.UI.updateTransient(this, dt);
+    // Panels with timers refresh twice per second.
+    this.ui.refreshTimer -= dt;
+    if (this.ui.panel && this.ui.refreshTimer <= 0) {
+      this.ui.refreshTimer = 0.5;
+      if (this.ui.panel.name !== 'plant') PS.UI.rebuild(this);
+    }
   }
+};
+
+// Garden panels (built with the shared interface helpers).
+PS.GardenUI = {
+  buildPlant(G, P) {
+    const UI = PS.UI;
+    const area = UI.frame(G, P, 'Plant a herb', 900);
+    const rows = G.plantable().map((ing) => (x, y, w, h) => {
+      const cost = G.seedCost(ing);
+      UI.panelBox(G, 'PanelParchment', x, y, w, h, P.items, 16);
+      UI.icon(G, ing.icon, x + 44, y + h / 2, 64, P.items, 'UI', 17);
+      UI.text(G, ing.name, x + 88, y + 12, 240, 28, '58;36;24', 'left', P.items, 'UI', 17);
+      UI.text(G, 'Grows in ' + U.formatTime(G.growTime(ing.id)) + ' · gives 4', x + 88, y + 50, 300, 22, '140;110;84',
+        'left', P.items, 'UI', 17);
+      UI.button(G, P, x + w - 200, y + 14, 190, h - 28, 'BtnGreen', 'Plant ' + U.formatGold(cost) + 'g', {
+        tag: 'plant:' + ing.id,
+        size: 24,
+        disabled: G.state.gold < cost,
+        onTap: () => {
+          if (G.plant(P.params.plot, ing)) UI.close(G);
+        },
+        onDisabled: () => UI.toast(G, 'Not enough gold for seeds'),
+      });
+    });
+    UI.list(G, P, area, 108, rows);
+  },
+
+  buildSpeedup(G, P) {
+    const UI = PS.UI;
+    const p = P.params.plot;
+    const herb = PS.data.ingredientById[p.state.herb];
+    const area = UI.frame(G, P, herb.name + ' is growing', 700);
+    if (G.growth(p) >= 1) {
+      UI.text(G, 'Ready to harvest! Tap the plant.', area.x, area.y + 20, area.w, 28, '72;160;72', 'center', P.items, 'UI', 17);
+      return;
+    }
+    UI.icon(G, herb.icon, area.x + 60, area.y + 50, 90, P.items, 'UI', 17);
+    UI.text(G, 'Ready in ' + U.formatTime(G.secondsLeft(p)), area.x + 130, area.y + 30, area.w - 130, 32, '58;36;24',
+      'left', P.items, 'UI', 17);
+    const gems = G.gemCost(p);
+    const gold = G.goldCost(p);
+    let y = area.y + 130;
+    UI.button(G, P, area.x, y, area.w, 80, 'BtnBlue', 'Finish now: ' + gems + ' gems', {
+      tag: 'speedGems',
+      icon: 'icon_quality',
+      size: 28,
+      disabled: G.state.gems < gems,
+      onTap: () => {
+        G.state.gems -= gems;
+        G.finishNow(p);
+        UI.close(G);
+      },
+      onDisabled: () => UI.toast(G, 'Not enough gems'),
+    });
+    y += 96;
+    UI.button(G, P, area.x, y, area.w, 80, 'BtnGold', 'Finish now: ' + U.formatGold(gold) + 'g', {
+      tag: 'speedGold',
+      icon: 'icon_coin',
+      size: 28,
+      disabled: G.state.gold < gold,
+      onTap: () => {
+        G.shop.addGold(-gold);
+        G.finishNow(p);
+        UI.close(G);
+      },
+      onDisabled: () => UI.toast(G, 'Not enough gold'),
+    });
+    y += 96;
+    const ads = PS.Ads.left(G);
+    UI.button(G, P, area.x, y, area.w, 80, 'BtnPurple', 'Watch an ad: half the time (' + ads + ' left today)', {
+      tag: 'speedAd',
+      icon: 'icon_ad',
+      size: 24,
+      disabled: ads <= 0,
+      onTap: () => PS.Ads.watch(G, 'Grow ' + herb.name + ' twice as fast', () => G.halveTime(p)),
+      onDisabled: () => UI.toast(G, 'No more ads today'),
+    });
+  },
 };
 
 }
 
 };
-gdjs.GardenCode.userFunc0x8e6958 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0xa02878 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // The garden needs the shop systems: start from the shop if they are missing.
 const PS = gdjs.PotionShop;
@@ -332,7 +491,7 @@ gdjs.GardenCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.GardenCode.userFunc0x949b30(runtimeScene);
+gdjs.GardenCode.userFunc0x9f8730(runtimeScene);
 
 }
 
@@ -340,12 +499,12 @@ gdjs.GardenCode.userFunc0x949b30(runtimeScene);
 {
 
 
-gdjs.GardenCode.userFunc0x8e6958(runtimeScene);
+gdjs.GardenCode.userFunc0xa02878(runtimeScene);
 
 }
 
 
-};gdjs.GardenCode.userFunc0x8bacc0 = function GDJSInlineCode(runtimeScene) {
+};gdjs.GardenCode.userFunc0x9fb6a0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const garden = runtimeScene.__garden;
 if (garden) garden.update();
@@ -371,7 +530,7 @@ gdjs.GardenCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.GardenCode.userFunc0x8bacc0(runtimeScene);
+gdjs.GardenCode.userFunc0x9fb6a0(runtimeScene);
 
 }
 
@@ -401,6 +560,16 @@ gdjs.GardenCode.GDPlantStarbloomObjects1.length = 0;
 gdjs.GardenCode.GDPlantStarbloomObjects2.length = 0;
 gdjs.GardenCode.GDPlantGlowcapObjects1.length = 0;
 gdjs.GardenCode.GDPlantGlowcapObjects2.length = 0;
+gdjs.GardenCode.GDPlantFrostberryObjects1.length = 0;
+gdjs.GardenCode.GDPlantFrostberryObjects2.length = 0;
+gdjs.GardenCode.GDPlantEmberpepperObjects1.length = 0;
+gdjs.GardenCode.GDPlantEmberpepperObjects2.length = 0;
+gdjs.GardenCode.GDPlantShadowmossObjects1.length = 0;
+gdjs.GardenCode.GDPlantShadowmossObjects2.length = 0;
+gdjs.GardenCode.GDPlantLuckycloverObjects1.length = 0;
+gdjs.GardenCode.GDPlantLuckycloverObjects2.length = 0;
+gdjs.GardenCode.GDPlantDragonscaleObjects1.length = 0;
+gdjs.GardenCode.GDPlantDragonscaleObjects2.length = 0;
 gdjs.GardenCode.GDBubbleObjects1.length = 0;
 gdjs.GardenCode.GDBubbleObjects2.length = 0;
 gdjs.GardenCode.GDNavBlockObjects1.length = 0;
@@ -463,6 +632,16 @@ gdjs.GardenCode.GDPlantStarbloomObjects1.length = 0;
 gdjs.GardenCode.GDPlantStarbloomObjects2.length = 0;
 gdjs.GardenCode.GDPlantGlowcapObjects1.length = 0;
 gdjs.GardenCode.GDPlantGlowcapObjects2.length = 0;
+gdjs.GardenCode.GDPlantFrostberryObjects1.length = 0;
+gdjs.GardenCode.GDPlantFrostberryObjects2.length = 0;
+gdjs.GardenCode.GDPlantEmberpepperObjects1.length = 0;
+gdjs.GardenCode.GDPlantEmberpepperObjects2.length = 0;
+gdjs.GardenCode.GDPlantShadowmossObjects1.length = 0;
+gdjs.GardenCode.GDPlantShadowmossObjects2.length = 0;
+gdjs.GardenCode.GDPlantLuckycloverObjects1.length = 0;
+gdjs.GardenCode.GDPlantLuckycloverObjects2.length = 0;
+gdjs.GardenCode.GDPlantDragonscaleObjects1.length = 0;
+gdjs.GardenCode.GDPlantDragonscaleObjects2.length = 0;
 gdjs.GardenCode.GDBubbleObjects1.length = 0;
 gdjs.GardenCode.GDBubbleObjects2.length = 0;
 gdjs.GardenCode.GDNavBlockObjects1.length = 0;
