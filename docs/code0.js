@@ -105,7 +105,7 @@ gdjs.ShopCode.GDUiTextObjects1= [];
 gdjs.ShopCode.GDUiTextObjects2= [];
 
 
-gdjs.ShopCode.userFunc0x9fb680 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f8738 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game data =====
 // Recipes, ingredients, customer types and upgrades are stored in the
@@ -254,7 +254,7 @@ PS.xpForLevel = function (level) {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fb770 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f75d0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: utilities =====
 // Math helpers, object helpers and the 3D -> screen projection used to place
@@ -377,7 +377,9 @@ PS.setupCamera = function (runtimeScene) {
   // Fit the shop width (walls included) and keep room for the HUD/menus.
   const targetWidth = 668;
   const halfH = Math.tan(((fov / 2) * Math.PI) / 180);
-  const halfW = halfH * aspect;
+  // Wider screens (desktop) keep the phone framing and simply show more of the
+  // surroundings at the sides instead of zooming in.
+  const halfW = halfH * Math.min(aspect, 0.4617);
   const dist = targetWidth / 2 / halfW;
   const elevation = (52 * Math.PI) / 180; // camera pitch from the ground
   const lookX = 320;
@@ -392,8 +394,48 @@ PS.setupCamera = function (runtimeScene) {
   if (cam) cam.updateMatrixWorld(true);
 };
 
+// Game resolution: always 1280 units tall; the width follows the window shape
+// but stays portrait (560-860 wide). Wider windows (desktop) get side margins
+// instead of a stretched landscape view; narrower ones keep the full height.
+PS.Viewport = {
+  H: 1280,
+  MIN_W: 560,
+  MAX_W: 860,
+  // Returns true when the game resolution changed (the caller re-lays out).
+  fit(game) {
+    if (typeof window === 'undefined' || !window.innerHeight) return false;
+    if (game.getAdaptGameResolutionAtRuntime()) game.setAdaptGameResolutionAtRuntime(false);
+    const W = Math.round(PS.util.clamp((this.H * window.innerWidth) / window.innerHeight, this.MIN_W, this.MAX_W));
+    if (W === game.getGameResolutionWidth() && game.getGameResolutionHeight() === this.H) return false;
+    game.setGameResolutionSize(W, this.H);
+    return true;
+  },
 };
-gdjs.ShopCode.userFunc0x9fb838 = function GDJSInlineCode(runtimeScene) {
+
+// Pausing and muting for several reasons at once: a full-screen ad, the
+// platform asking for it (Playgama), or the app being in the background.
+PS.Pause = {
+  reasons: new Set(),
+  set(reason, on) {
+    if (on) this.reasons.add(reason);
+    else this.reasons.delete(reason);
+  },
+  active() {
+    return this.reasons.size > 0;
+  },
+};
+PS.Mute = {
+  reasons: new Set(),
+  game: null,
+  set(reason, on) {
+    if (on) this.reasons.add(reason);
+    else this.reasons.delete(reason);
+    if (this.game) this.game.getSoundManager().setGlobalVolume(this.reasons.size ? 0 : 100);
+  },
+};
+
+};
+gdjs.ShopCode.userFunc0x9f5f68 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: navigation =====
 // Characters walk on a grid built once at scene start. Blocked cells come from
@@ -610,11 +652,12 @@ PS.goTo = function (ch, x, y) {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fb900 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9f6988 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
-// available in mobile exports) under the "PotionShop" storage name.
+// available in mobile exports) under the "PotionShop" storage name, or with
+// the platform's storage in platform builds (see PS.Store).
 // Loading validates every field and falls back to defaults on bad data.
 //
 // The save has two parts:
@@ -623,6 +666,32 @@ gdjs.ShopCode.userFunc0x9fb900 = function GDJSInlineCode(runtimeScene) {
 //         (gold, herbs, upgrades, stored potions, hired workers).
 // In memory the game uses one flat object; the split happens when saving.
 const PS = gdjs.PotionShop;
+
+// Where saves live. Platform builds (Playgama) provide window.PotionPlatform.storage,
+// which must be used instead of localStorage there; everywhere else GDevelop's
+// storage (localStorage on the web) is used.
+PS.Store = {
+  platform() {
+    const P = typeof window !== 'undefined' && window.PotionPlatform;
+    return P && P.storage ? P.storage : null;
+  },
+  read(key) {
+    const p = this.platform();
+    if (p) return p.get(key);
+    const v = new gdjs.Variable();
+    return gdjs.evtTools.storage.readStringFromJSONFile('PotionShop', key, null, v) ? v.getAsString() : null;
+  },
+  write(key, text) {
+    const p = this.platform();
+    if (p) p.set(key, text);
+    else gdjs.evtTools.storage.writeStringInJSONFile('PotionShop', key, text);
+  },
+  remove(key) {
+    const p = this.platform();
+    if (p) p.remove(key);
+    else gdjs.evtTools.storage.deleteElementFromJSONFile('PotionShop', key);
+  },
+};
 
 PS.Save = {
   STORAGE: 'PotionShop',
@@ -755,13 +824,10 @@ PS.Save = {
   },
 
   load() {
-    const tools = gdjs.evtTools.storage;
-    const variable = new gdjs.Variable();
     let raw = null;
     try {
-      if (tools.readStringFromJSONFile(this.STORAGE, this.KEY, null, variable)) {
-        raw = JSON.parse(variable.getAsString());
-      }
+      const text = PS.Store.read(this.KEY);
+      if (text) raw = JSON.parse(text);
     } catch (e) {
       console.warn('Potion Shop: save data is invalid, starting fresh.', e);
       raw = null;
@@ -771,7 +837,7 @@ PS.Save = {
 
   save(state) {
     try {
-      gdjs.evtTools.storage.writeStringInJSONFile(this.STORAGE, this.KEY, JSON.stringify(this.pack(state)));
+      PS.Store.write(this.KEY, JSON.stringify(this.pack(state)));
       return true;
     } catch (e) {
       console.warn('Potion Shop: could not save.', e);
@@ -781,7 +847,7 @@ PS.Save = {
 
   reset() {
     try {
-      gdjs.evtTools.storage.deleteElementFromJSONFile(this.STORAGE, this.KEY);
+      PS.Store.remove(this.KEY);
     } catch (e) {
       console.warn('Potion Shop: could not reset the save.', e);
     }
@@ -789,7 +855,7 @@ PS.Save = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fba20 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9faec0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: shop world =====
 // Builds the shop from the scene instances (tables, cauldrons, waypoints),
@@ -1369,7 +1435,7 @@ PS.FX = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fbaf8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9c4028 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: workers and task queue =====
 // Every worker performs one physical task at a time.
@@ -1844,7 +1910,7 @@ PS.Workers = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fbbd0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0xa02d10 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: brewing =====
 // Cauldron states: idle -> reserved (ingredients paid, worker on the way)
@@ -2125,7 +2191,7 @@ PS.Stock = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fbca8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0xa02de8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: interface =====
 // HUD (top), navigation (bottom), panels (brew, orders, ingredients,
@@ -3173,7 +3239,12 @@ PS.UI = {
     }
     this.button(G, P, area.x + area.w / 2 - 140, y + 10, 280, 76, 'BtnGreen', 'Great!', {
       size: 34,
-      onTap: () => this.close(G),
+      onTap: () => {
+        this.close(G);
+        // A level-up is a natural pause: platform builds may show an interstitial
+        // (never during the tutorial).
+        if (!G.tutorial || !G.tutorial.active) PS.Ads.interstitial('level_up');
+      },
     });
   },
 
@@ -3698,7 +3769,7 @@ PS.Input = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fbd80 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0xa02ec0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game state, progression and main loop =====
 const PS = gdjs.PotionShop;
@@ -3815,18 +3886,48 @@ PS.Ads = {
     const A = this.adapter();
     if (!A || A._potionHooked) return;
     A._potionHooked = true;
-    let volume = 100;
     A._pauseGame = (on) => {
-      if (!!PS.adPlaying === !!on) return;
       PS.adPlaying = !!on;
-      const sm = PS.game.scene.getGame().getSoundManager();
-      if (on) {
-        volume = sm.getGlobalVolume();
-        sm.setGlobalVolume(0);
-      } else {
-        sm.setGlobalVolume(volume);
-      }
+      PS.Pause.set('ad', on);
+      PS.Mute.set('ad', on);
     };
+  },
+  // Full-screen ad at a natural pause (only where the platform requires it:
+  // Playgama). The platform limits how often they appear.
+  interstitial(placement) {
+    const P = typeof window !== 'undefined' && window.PotionPlatform;
+    if (P && P.showInterstitial) P.showInterstitial(placement);
+  },
+};
+
+// Hooks into the hosting platform (window.PotionPlatform, only in platform
+// builds such as Playgama): pause/audio requests and the "game ready" message.
+PS.Platform = {
+  get() {
+    return (typeof window !== 'undefined' && window.PotionPlatform) || null;
+  },
+  init(game) {
+    PS.Mute.game = game.getSoundManager ? game : game.getGame();
+    if (typeof document !== 'undefined' && !PS._visibilityHooked) {
+      PS._visibilityHooked = true;
+      // No sound while the app is in the background.
+      document.addEventListener('visibilitychange', () => PS.Mute.set('hidden', document.hidden));
+    }
+    const P = this.get();
+    if (!P || P._potionHooked) return;
+    P._potionHooked = true;
+    P.onPause((paused) => {
+      PS.Pause.set('platform', paused);
+      PS.Mute.set('platform-pause', paused);
+    });
+    P.onAudio((enabled) => PS.Mute.set('platform', !enabled));
+  },
+  gameReady() {
+    const P = this.get();
+    if (P && !P._readySent) {
+      P._readySent = true;
+      P.gameReady();
+    }
   },
 };
 
@@ -3844,6 +3945,7 @@ PS.Game = class {
     PS.proj.init(runtimeScene);
     this.settings = this.loadSettings();
     this.state = PS.Save.load();
+    PS.Viewport.fit(runtimeScene.getGame());
     PS.setupCamera(runtimeScene);
     PS.World.init(this);
     // Navigation is built after the tables exist (long tables are created at runtime).
@@ -3855,6 +3957,7 @@ PS.Game = class {
     PS.Tutorial.init(this);
     PS.Audio.music(this);
     PS.Ads.hookPause(this);
+    PS.Platform.init(runtimeScene.getGame());
     this.checkOffline();
     this.incomeTimer = 0;
     this.earnedMark = this.state.earned;
@@ -3930,6 +4033,7 @@ PS.Game = class {
     PS.Save.save(next);
     this.prestiging = true;
     this.scene.requestChange(gdjs.SceneChangeRequest.REPLACE_SCENE, 'Shop');
+    PS.Ads.interstitial('prestige'); // natural pause between two shops
     return true;
   }
 
@@ -4073,10 +4177,10 @@ PS.Game = class {
     PS.Save.save(this.snapshot());
   }
   loadSettings() {
-    const v = new gdjs.Variable();
     let s = null;
     try {
-      if (gdjs.evtTools.storage.readStringFromJSONFile('PotionShop', 'settings', null, v)) s = JSON.parse(v.getAsString());
+      const text = PS.Store.read('settings');
+      if (text) s = JSON.parse(text);
     } catch (e) {
       s = null;
     }
@@ -4084,7 +4188,7 @@ PS.Game = class {
     return { shadows: flag('shadows'), sound: flag('sound'), music: flag('music') };
   }
   saveSettings() {
-    gdjs.evtTools.storage.writeStringInJSONFile('PotionShop', 'settings', JSON.stringify(this.settings));
+    PS.Store.write('settings', JSON.stringify(this.settings));
   }
   setShadows(on) {
     this.settings.shadows = on;
@@ -4104,12 +4208,23 @@ PS.Game = class {
   }
 
   // ----- main loop
+  // The window changed shape: new resolution, so re-fit the camera and rebuild the interface.
+  onResize() {
+    PS.setupCamera(this.scene);
+    PS.UI.buildHud(this);
+    if (this.ui.panel) PS.UI.rebuild(this);
+    if (this.tutorial) this.tutorial.last = '';
+  }
+
   update() {
     PS.proj.scene = this.scene; // the garden scene may have changed it
+    if (PS.Viewport.fit(this.scene.getGame())) this.onResize();
+    // First frame drawn with the shop ready: tell the platform the game can be played.
+    if (this.started) PS.Platform.gameReady();
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     // PS.simSteps > 1 runs the simulation several times per frame (automated tests only).
     // Paused while a rewarded ad is on screen.
-    const steps = PS.adPlaying ? 0 : PS.simSteps || 1;
+    const steps = PS.Pause.active() ? 0 : PS.simSteps || 1;
     for (let i = 0; i < steps; i++) {
       this.time += dt;
       PS.World.updateCustomers(this, dt);
@@ -4133,7 +4248,7 @@ PS.Game = class {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fbe58 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0xa02f98 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: first-time tutorial =====
 // A bouncing hand points at what to tap next and a banner explains it. The
@@ -4463,7 +4578,7 @@ PS.Tutorial = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9fbf30 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0xa03070 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // Create the game once the systems above are defined.
 const PS = gdjs.PotionShop;
@@ -4482,7 +4597,7 @@ gdjs.ShopCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.ShopCode.userFunc0x9fb680(runtimeScene);
+gdjs.ShopCode.userFunc0x9f8738(runtimeScene);
 
 }
 
@@ -4490,7 +4605,7 @@ gdjs.ShopCode.userFunc0x9fb680(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fb770(runtimeScene);
+gdjs.ShopCode.userFunc0x9f75d0(runtimeScene);
 
 }
 
@@ -4498,7 +4613,7 @@ gdjs.ShopCode.userFunc0x9fb770(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fb838(runtimeScene);
+gdjs.ShopCode.userFunc0x9f5f68(runtimeScene);
 
 }
 
@@ -4506,7 +4621,7 @@ gdjs.ShopCode.userFunc0x9fb838(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fb900(runtimeScene);
+gdjs.ShopCode.userFunc0x9f6988(runtimeScene);
 
 }
 
@@ -4514,7 +4629,7 @@ gdjs.ShopCode.userFunc0x9fb900(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fba20(runtimeScene);
+gdjs.ShopCode.userFunc0x9faec0(runtimeScene);
 
 }
 
@@ -4522,7 +4637,7 @@ gdjs.ShopCode.userFunc0x9fba20(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fbaf8(runtimeScene);
+gdjs.ShopCode.userFunc0x9c4028(runtimeScene);
 
 }
 
@@ -4530,7 +4645,7 @@ gdjs.ShopCode.userFunc0x9fbaf8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fbbd0(runtimeScene);
+gdjs.ShopCode.userFunc0xa02d10(runtimeScene);
 
 }
 
@@ -4538,7 +4653,7 @@ gdjs.ShopCode.userFunc0x9fbbd0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fbca8(runtimeScene);
+gdjs.ShopCode.userFunc0xa02de8(runtimeScene);
 
 }
 
@@ -4546,7 +4661,7 @@ gdjs.ShopCode.userFunc0x9fbca8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fbd80(runtimeScene);
+gdjs.ShopCode.userFunc0xa02ec0(runtimeScene);
 
 }
 
@@ -4554,7 +4669,7 @@ gdjs.ShopCode.userFunc0x9fbd80(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fbe58(runtimeScene);
+gdjs.ShopCode.userFunc0xa02f98(runtimeScene);
 
 }
 
@@ -4562,12 +4677,12 @@ gdjs.ShopCode.userFunc0x9fbe58(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9fbf30(runtimeScene);
+gdjs.ShopCode.userFunc0xa03070(runtimeScene);
 
 }
 
 
-};gdjs.ShopCode.userFunc0x9fc030 = function GDJSInlineCode(runtimeScene) {
+};gdjs.ShopCode.userFunc0x9f5db8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const game = runtimeScene.__potionShop;
 if (game) game.update();
@@ -4593,7 +4708,7 @@ gdjs.ShopCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.ShopCode.userFunc0x9fc030(runtimeScene);
+gdjs.ShopCode.userFunc0x9f5db8(runtimeScene);
 
 }
 

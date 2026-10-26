@@ -1,0 +1,21 @@
+{
+    "advertisement": {
+        "minimumDelayBetweenInterstitial": 90,
+        "initialInterstitialDelay": 60,
+        "interstitial": {
+            "placementFallback": "level_up",
+            "placements": [
+                { "id": "level_up" },
+                { "id": "garden_return" },
+                { "id": "prestige" }
+            ]
+        },
+        "rewarded": {
+            "placementFallback": "reward",
+            "placements": [
+                { "id": "reopen_shop" },
+                { "id": "garden_speedup" }
+            ]
+        }
+    }
+}

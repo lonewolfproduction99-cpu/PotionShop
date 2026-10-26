@@ -119,7 +119,9 @@ PS.setupCamera = function (runtimeScene) {
   // Fit the shop width (walls included) and keep room for the HUD/menus.
   const targetWidth = 668;
   const halfH = Math.tan(((fov / 2) * Math.PI) / 180);
-  const halfW = halfH * aspect;
+  // Wider screens (desktop) keep the phone framing and simply show more of the
+  // surroundings at the sides instead of zooming in.
+  const halfW = halfH * Math.min(aspect, 0.4617);
   const dist = targetWidth / 2 / halfW;
   const elevation = (52 * Math.PI) / 180; // camera pitch from the ground
   const lookX = 320;
@@ -132,4 +134,44 @@ PS.setupCamera = function (runtimeScene) {
   gdjs.scene3d.camera.setCameraZ(runtimeScene, camZ, '', 0);
   gdjs.scene3d.camera.turnCameraTowardPosition(runtimeScene, lookX, lookY, 0, '', 0, false);
   if (cam) cam.updateMatrixWorld(true);
+};
+
+// Game resolution: always 1280 units tall; the width follows the window shape
+// but stays portrait (560-860 wide). Wider windows (desktop) get side margins
+// instead of a stretched landscape view; narrower ones keep the full height.
+PS.Viewport = {
+  H: 1280,
+  MIN_W: 560,
+  MAX_W: 860,
+  // Returns true when the game resolution changed (the caller re-lays out).
+  fit(game) {
+    if (typeof window === 'undefined' || !window.innerHeight) return false;
+    if (game.getAdaptGameResolutionAtRuntime()) game.setAdaptGameResolutionAtRuntime(false);
+    const W = Math.round(PS.util.clamp((this.H * window.innerWidth) / window.innerHeight, this.MIN_W, this.MAX_W));
+    if (W === game.getGameResolutionWidth() && game.getGameResolutionHeight() === this.H) return false;
+    game.setGameResolutionSize(W, this.H);
+    return true;
+  },
+};
+
+// Pausing and muting for several reasons at once: a full-screen ad, the
+// platform asking for it (Playgama), or the app being in the background.
+PS.Pause = {
+  reasons: new Set(),
+  set(reason, on) {
+    if (on) this.reasons.add(reason);
+    else this.reasons.delete(reason);
+  },
+  active() {
+    return this.reasons.size > 0;
+  },
+};
+PS.Mute = {
+  reasons: new Set(),
+  game: null,
+  set(reason, on) {
+    if (on) this.reasons.add(reason);
+    else this.reasons.delete(reason);
+    if (this.game) this.game.getSoundManager().setGlobalVolume(this.reasons.size ? 0 : 100);
+  },
 };

@@ -1,6 +1,7 @@
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
-// available in mobile exports) under the "PotionShop" storage name.
+// available in mobile exports) under the "PotionShop" storage name, or with
+// the platform's storage in platform builds (see PS.Store).
 // Loading validates every field and falls back to defaults on bad data.
 //
 // The save has two parts:
@@ -9,6 +10,32 @@
 //         (gold, herbs, upgrades, stored potions, hired workers).
 // In memory the game uses one flat object; the split happens when saving.
 const PS = gdjs.PotionShop;
+
+// Where saves live. Platform builds (Playgama) provide window.PotionPlatform.storage,
+// which must be used instead of localStorage there; everywhere else GDevelop's
+// storage (localStorage on the web) is used.
+PS.Store = {
+  platform() {
+    const P = typeof window !== 'undefined' && window.PotionPlatform;
+    return P && P.storage ? P.storage : null;
+  },
+  read(key) {
+    const p = this.platform();
+    if (p) return p.get(key);
+    const v = new gdjs.Variable();
+    return gdjs.evtTools.storage.readStringFromJSONFile('PotionShop', key, null, v) ? v.getAsString() : null;
+  },
+  write(key, text) {
+    const p = this.platform();
+    if (p) p.set(key, text);
+    else gdjs.evtTools.storage.writeStringInJSONFile('PotionShop', key, text);
+  },
+  remove(key) {
+    const p = this.platform();
+    if (p) p.remove(key);
+    else gdjs.evtTools.storage.deleteElementFromJSONFile('PotionShop', key);
+  },
+};
 
 PS.Save = {
   STORAGE: 'PotionShop',
@@ -141,13 +168,10 @@ PS.Save = {
   },
 
   load() {
-    const tools = gdjs.evtTools.storage;
-    const variable = new gdjs.Variable();
     let raw = null;
     try {
-      if (tools.readStringFromJSONFile(this.STORAGE, this.KEY, null, variable)) {
-        raw = JSON.parse(variable.getAsString());
-      }
+      const text = PS.Store.read(this.KEY);
+      if (text) raw = JSON.parse(text);
     } catch (e) {
       console.warn('Potion Shop: save data is invalid, starting fresh.', e);
       raw = null;
@@ -157,7 +181,7 @@ PS.Save = {
 
   save(state) {
     try {
-      gdjs.evtTools.storage.writeStringInJSONFile(this.STORAGE, this.KEY, JSON.stringify(this.pack(state)));
+      PS.Store.write(this.KEY, JSON.stringify(this.pack(state)));
       return true;
     } catch (e) {
       console.warn('Potion Shop: could not save.', e);
@@ -167,7 +191,7 @@ PS.Save = {
 
   reset() {
     try {
-      gdjs.evtTools.storage.deleteElementFromJSONFile(this.STORAGE, this.KEY);
+      PS.Store.remove(this.KEY);
     } catch (e) {
       console.warn('Potion Shop: could not reset the save.', e);
     }

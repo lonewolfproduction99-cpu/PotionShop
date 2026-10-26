@@ -1,0 +1,70 @@
+# Publishing Potion Shop on Playgama
+
+## The file to upload
+
+**`releases/potion-shop-playgama.zip`** (about 4 MB, `index.html` at the root).
+
+To rebuild it after changing the game:
+
+```
+python3 tools/build_project.py
+tools/export.sh <GDevelop portable app dir> docs     # or export HTML5 from GDevelop into docs/
+python3 tools/platforms/build_playgama.py            # -> releases/potion-shop-playgama.zip
+node tools/test/play.js dist/playgama/build out playgama   # automated checks
+```
+
+## What the Playgama build does (Bridge "required steps")
+
+| Requirement | How Potion Shop does it |
+| --- | --- |
+| Bridge initialized first | `index.html` loads Bridge from `https://bridge.playgama.com/v2/stable/playgama-bridge.js`. The game loop starts only after `bridge.initialize()` and the save have loaded (`platforms/playgama/playgama.js`). |
+| Language | English only, so English is the default and fallback. `platform.language` is read. |
+| Storage | Saves and settings go through `bridge.storage` (keys `potionshop_save` and `potionshop_settings`). Both load in one `get` call and are written in one `set` call per change, never through `localStorage`. |
+| Pause / audio events | `PAUSE_STATE_CHANGED` pauses the shop and mutes it. `AUDIO_STATE_CHANGED` mutes or unmutes, and the initial `isAudioEnabled` is applied at start. Sound also stops while the page is in the background. |
+| `game_ready` | Sent on the first frame after loading, when the player can tap. |
+| Interstitials | At natural pauses only: after closing the level-up panel, when leaving the herb garden, and after a prestige. Never during the tutorial. Bridge config: at most one per 90 s, none in the first 60 s. |
+| Rewarded ads | "Watch an ad to reopen" (shop closed) and "Watch an ad: half the time" (garden). The reward is given only when Bridge reports `rewarded`, with a daily limit of 10. Both rewards are optional bonuses; gold and gems still work. |
+| No external resources / analytics / links | Only the Bridge comes from outside the build. GDevelop's usage analytics are switched off in this build, and the GDevelop watermark link is turned off in the project (the GDevelop logo stays on the loading screen). |
+| Layout | Portrait. On phones the game fills the screen. On desktop the play area fills the window height, stays portrait (well within 1:2) and leaves margins at the sides. There is no page scrolling. |
+| Controls | Touch and mouse (taps and clicks). Long presses don't select text or open menus. |
+| Mute control | Settings (gear) → Sounds and Music switches. |
+
+## Upload steps (in your Playgama developer account)
+
+1. Create an account at **https://developer.playgama.com/** and sign in.
+2. Click **Add Game** and fill in the form. Suggested values are below.
+3. Attach `releases/potion-shop-playgama.zip` as the **Game Archive**.
+4. Click **Test Game**. Playgama's QA Tool opens. This is the first time the game runs on the real Playgama platform, so check that:
+   - it loads;
+   - a test interstitial appears after a level-up;
+   - a rewarded ad gives its reward (close the shop or speed up a garden plot);
+   - progress is kept after a reload;
+   - sound stops during ads.
+5. If everything works, click **Submit Game**. Moderation usually takes 1–5 business days; Playgama's moderators contact you in a chat for a first game.
+6. You can update the game later by uploading a new zip in the same entry.
+
+### Suggested form values
+
+- **Title:** Potion Shop
+- **Game Engine:** GDevelop
+- **Description:** Run a cozy 3D potion shop! Take orders, brew potions in bubbling cauldrons and serve customers before they lose patience. Discover secret bonus herbs for better potions, grow your own herbs in the garden, hire apprentices and upgrade everything. Then prestige into a bigger shop with long tables, new potions and customers who order several potions at once.
+- **How to play:**
+  - Tap a waiting customer to take their order.
+  - Tap the cauldron, pick the ingredients and press BREW.
+  - When the potion is ready, tap the cauldron again to collect and deliver it.
+  - Use gold for herbs, upgrades, tables and cauldrons (bottom menu). Grow herbs in the Herb Garden (Herbs → Visit the Herb Garden).
+  - A short tutorial shows the basics.
+- **Supported Devices:** Mobile Android, Mobile iOS, Desktop (all browsers).
+- **Screen Orientation:** Portrait.
+- **Game Features:** single player, saves progress, rewarded ads, interstitial ads (pick the matching options in the form).
+- **Game Languages:** English.
+- **Media:** cover and screenshots. Take them from the game, or ask for a set of cover images.
+- **Distribution:** leave all partner platforms selected unless you want to exclude some.
+
+## Things to know before submitting
+
+- **AI-generated content policy.** Playgama's requirements say they accept games that use AI, but "don't take games that are 100% AI-generated without substantial human refinement of the visuals".
+  - All of Potion Shop's 3D models, icons and sounds were generated by code (`tools/`) during AI-assisted development.
+  - Moderation may reject the game on this point. Your own art changes (a cover, a logo, retouched models or icons, your own music) make it stronger.
+- **Sounds.** Playgama's tips recommend compressed audio (ogg/mp3) and ready-made sound packs over synthesized sound. The current sounds are short generated WAV files. They work, but replacing them improves quality and load time.
+- **Not tested on the real platform.** The automated test runs the real Bridge script, but outside Playgama it uses Bridge's local "mock" platform, which shows no real ads. Real ads, cloud saves and the pause events can only be confirmed in Playgama's QA Tool and after publishing.

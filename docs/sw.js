@@ -9,7 +9,7 @@
  * - Save data lives in localStorage, which the service worker never touches.
  */
 'use strict';
-const VERSION = "1e84c452ad2f";
+const VERSION = "22c48af0f3b1";
 const CACHE = 'potion-shop-' + VERSION;
 const PRECACHE = [
  "./",

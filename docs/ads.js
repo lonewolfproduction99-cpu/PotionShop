@@ -215,6 +215,9 @@
   // so that no fake reward can ever be granted in production.
   providers.playgama = {
     init: function () {
+      // The Playgama build loads Bridge in index.html and initializes it once
+      // (platforms/playgama/playgama.js); reuse that.
+      if (window.PotionPlatform && window.PotionPlatform.name === 'playgama') return window.PotionPlatform.ready;
       var p = cfg.playgama || {};
       if (!p.sdkUrl) return Promise.reject(new Error('playgama.sdkUrl missing'));
       return loadScript(p.sdkUrl).then(function () { return window.bridge.initialize(); });

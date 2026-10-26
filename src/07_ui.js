@@ -1044,7 +1044,12 @@ PS.UI = {
     }
     this.button(G, P, area.x + area.w / 2 - 140, y + 10, 280, 76, 'BtnGreen', 'Great!', {
       size: 34,
-      onTap: () => this.close(G),
+      onTap: () => {
+        this.close(G);
+        // A level-up is a natural pause: platform builds may show an interstitial
+        // (never during the tutorial).
+        if (!G.tutorial || !G.tutorial.active) PS.Ads.interstitial('level_up');
+      },
     });
   },
 

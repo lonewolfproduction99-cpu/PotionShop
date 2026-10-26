@@ -576,7 +576,7 @@ def build():
                               "minDuration": 1, "progressBarColor": 16767066, "progressBarHeight": 20,
                               "progressBarMaxWidth": 300, "progressBarMinWidth": 40,
                               "progressBarWidthPercent": 40, "showGDevelopSplash": True, "showProgressBar": True},
-            "watermark": {"placement": "bottom-left", "showWatermark": True},
+            "watermark": {"placement": "bottom-left", "showWatermark": False},  # GDevelop splash logo stays on the loading screen
             "authorIds": [], "authorUsernames": [], "categories": ["simulation"], "playableDevices": ["mobile"],
             "extensionProperties": [], "platforms": [{"name": "GDevelop JS platform"}],
             "currentPlatform": "GDevelop JS platform",

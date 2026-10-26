@@ -123,6 +123,10 @@ The exported build in `docs/` is also a Progressive Web App:
 
 `docs/` uses clearly labelled **simulated test ads**. The production deploy to Cloudflare Pages (`.github/workflows/deploy.yml`) uses no ads until an ad network approves the game. Setup, provider research and the steps that need your accounts are in **[pwa/README.md](pwa/README.md)**.
 
+## Playgama release
+
+`releases/potion-shop-playgama.zip` is the upload for Playgama. It has Bridge SDK integration, saves through Bridge storage, interstitial and rewarded ads through Bridge, and pause/mute on platform events. Build it with `python3 tools/platforms/build_playgama.py`. Upload steps and suggested listing text are in **[platforms/playgama/README.md](platforms/playgama/README.md)**.
+
 ## Project structure
 
 | Path | What it is |
@@ -135,6 +139,8 @@ The exported build in `docs/` is also a Progressive Web App:
 | `src/garden/*.js` | The herb garden, the JavaScript event of the `Garden` scene |
 | `tools/` | Asset generators, project builder, export script and Playwright play-tests |
 | `docs/` | Exported HTML5 build with the PWA layer (test build, simulated ads) |
+| `platforms/playgama/` | Playgama Bridge integration and config (applied by `tools/platforms/build_playgama.py`) |
+| `releases/` | Ready-to-upload builds (Playgama zip) |
 | `pwa/` | PWA layer: service worker template, ad adapter, ad configs, icons (applied by `tools/pwa/apply_pwa.py`) |
 
 ### Editing in GDevelop
@@ -156,7 +162,7 @@ python3 tools/build_ui.py        # UI images   -> game/assets/ui
 python3 tools/build_sfx.py       # sounds and music -> game/assets/sfx
 python3 tools/build_project.py   # GDevelop project (embeds src/*.js as events)
 tools/export.sh <GDevelop portable app dir> docs   # HTML5 export with the official GDevelop CLI
-node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, m6, tutorial, pwa, prodads, bot, showcase)
+node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, m6, tutorial, pwa, prodads, playgama, bot, showcase)
 ```
 
 Note: `build_project.py` regenerates `game/PotionShop.json`. If you edit the project in GDevelop, keep working in GDevelop or port your changes back to the tools.

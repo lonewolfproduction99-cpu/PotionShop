@@ -37,6 +37,7 @@ PS.Garden = class {
     this.gathering = null;
     this.waiting = [];
     PS.proj.scene = scene;
+    PS.Viewport.fit(scene.getGame());
     PS.setupCamera(scene);
     const st = this.state;
     this.plots = scene
@@ -145,6 +146,9 @@ PS.Garden = class {
 
   buildHud() {
     const UI = PS.UI;
+    this.ui.hud.items.forEach((o) => PS.destroy(o));
+    this.ui.hud.items = [];
+    this.ui.hud.hits = [];
     const L = this.ui.hud.items;
     const W = UI.W(this);
     const H = UI.H(this);
@@ -181,6 +185,7 @@ PS.Garden = class {
     PS.UI.close(this);
     this.shop.saveNow();
     this.scene.requestChange(gdjs.SceneChangeRequest.POP_SCENE);
+    if (!this.tutorial || !this.tutorial.active) PS.Ads.interstitial('garden_return'); // natural pause
   }
 
   // Taps that are not on the interface (called by PS.UI.tap).
@@ -253,6 +258,13 @@ PS.Garden = class {
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     this.time += dt;
     PS.proj.scene = this.scene;
+    if (PS.Viewport.fit(this.scene.getGame())) {
+      // The window changed shape: re-fit the camera and rebuild the interface.
+      PS.setupCamera(this.scene);
+      this.buildHud();
+      if (this.ui.panel) PS.UI.rebuild(this);
+      if (this.tutorial) this.tutorial.last = '';
+    }
     PS.UI.handleInput(this);
     for (const p of this.plots) {
       const g = this.growth(p);

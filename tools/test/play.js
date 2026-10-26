@@ -35,6 +35,8 @@ server.listen(0, async () => {
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + '\n' + (e.stack || '')));
+  const requests = [];
+  page.on('request', (r) => requests.push(r.url()));
   await page.goto(`http://localhost:${port}/index.html`);
   // Wait for the game object to exist.
   await page.waitForFunction(() => window.gdjs && gdjs.PotionShop && gdjs.PotionShop.game, null, { timeout: 60000 });
@@ -65,7 +67,7 @@ server.listen(0, async () => {
     cauldrons: G.cauldrons.filter((c) => c.unlocked).map((c) => ({ state: c.state, recipe: c.recipe && c.recipe.id, t: +c.t.toFixed(1) })),
     owner: { x: Math.round(G.owner.obj.getX()), y: Math.round(G.owner.obj.getY()), task: G.owner.task && G.owner.task.type, phase: G.owner.task && G.owner.task.phase, queue: G.owner.queue.map((t) => t.type), carrying: G.owner.carrying && G.owner.carrying.id },
     panel: G.ui.panel && G.ui.panel.name, queue: G.queue.map((c) => c.id) }; });
-  const ctxObj = { page, ctx, shot, sleep, tapGame, tapWorld, state, evalG, errors, outDir, buildDir };
+  const ctxObj = { page, ctx, shot, sleep, tapGame, tapWorld, state, evalG, errors, outDir, buildDir, requests };
   try {
     const mod = require(path.resolve(__dirname, 'scenarios', scenario + '.js'));
     await mod(ctxObj);

@@ -113,18 +113,48 @@ PS.Ads = {
     const A = this.adapter();
     if (!A || A._potionHooked) return;
     A._potionHooked = true;
-    let volume = 100;
     A._pauseGame = (on) => {
-      if (!!PS.adPlaying === !!on) return;
       PS.adPlaying = !!on;
-      const sm = PS.game.scene.getGame().getSoundManager();
-      if (on) {
-        volume = sm.getGlobalVolume();
-        sm.setGlobalVolume(0);
-      } else {
-        sm.setGlobalVolume(volume);
-      }
+      PS.Pause.set('ad', on);
+      PS.Mute.set('ad', on);
     };
+  },
+  // Full-screen ad at a natural pause (only where the platform requires it:
+  // Playgama). The platform limits how often they appear.
+  interstitial(placement) {
+    const P = typeof window !== 'undefined' && window.PotionPlatform;
+    if (P && P.showInterstitial) P.showInterstitial(placement);
+  },
+};
+
+// Hooks into the hosting platform (window.PotionPlatform, only in platform
+// builds such as Playgama): pause/audio requests and the "game ready" message.
+PS.Platform = {
+  get() {
+    return (typeof window !== 'undefined' && window.PotionPlatform) || null;
+  },
+  init(game) {
+    PS.Mute.game = game.getSoundManager ? game : game.getGame();
+    if (typeof document !== 'undefined' && !PS._visibilityHooked) {
+      PS._visibilityHooked = true;
+      // No sound while the app is in the background.
+      document.addEventListener('visibilitychange', () => PS.Mute.set('hidden', document.hidden));
+    }
+    const P = this.get();
+    if (!P || P._potionHooked) return;
+    P._potionHooked = true;
+    P.onPause((paused) => {
+      PS.Pause.set('platform', paused);
+      PS.Mute.set('platform-pause', paused);
+    });
+    P.onAudio((enabled) => PS.Mute.set('platform', !enabled));
+  },
+  gameReady() {
+    const P = this.get();
+    if (P && !P._readySent) {
+      P._readySent = true;
+      P.gameReady();
+    }
   },
 };
 
@@ -142,6 +172,7 @@ PS.Game = class {
     PS.proj.init(runtimeScene);
     this.settings = this.loadSettings();
     this.state = PS.Save.load();
+    PS.Viewport.fit(runtimeScene.getGame());
     PS.setupCamera(runtimeScene);
     PS.World.init(this);
     // Navigation is built after the tables exist (long tables are created at runtime).
@@ -153,6 +184,7 @@ PS.Game = class {
     PS.Tutorial.init(this);
     PS.Audio.music(this);
     PS.Ads.hookPause(this);
+    PS.Platform.init(runtimeScene.getGame());
     this.checkOffline();
     this.incomeTimer = 0;
     this.earnedMark = this.state.earned;
@@ -228,6 +260,7 @@ PS.Game = class {
     PS.Save.save(next);
     this.prestiging = true;
     this.scene.requestChange(gdjs.SceneChangeRequest.REPLACE_SCENE, 'Shop');
+    PS.Ads.interstitial('prestige'); // natural pause between two shops
     return true;
   }
 
@@ -371,10 +404,10 @@ PS.Game = class {
     PS.Save.save(this.snapshot());
   }
   loadSettings() {
-    const v = new gdjs.Variable();
     let s = null;
     try {
-      if (gdjs.evtTools.storage.readStringFromJSONFile('PotionShop', 'settings', null, v)) s = JSON.parse(v.getAsString());
+      const text = PS.Store.read('settings');
+      if (text) s = JSON.parse(text);
     } catch (e) {
       s = null;
     }
@@ -382,7 +415,7 @@ PS.Game = class {
     return { shadows: flag('shadows'), sound: flag('sound'), music: flag('music') };
   }
   saveSettings() {
-    gdjs.evtTools.storage.writeStringInJSONFile('PotionShop', 'settings', JSON.stringify(this.settings));
+    PS.Store.write('settings', JSON.stringify(this.settings));
   }
   setShadows(on) {
     this.settings.shadows = on;
@@ -402,12 +435,23 @@ PS.Game = class {
   }
 
   // ----- main loop
+  // The window changed shape: new resolution, so re-fit the camera and rebuild the interface.
+  onResize() {
+    PS.setupCamera(this.scene);
+    PS.UI.buildHud(this);
+    if (this.ui.panel) PS.UI.rebuild(this);
+    if (this.tutorial) this.tutorial.last = '';
+  }
+
   update() {
     PS.proj.scene = this.scene; // the garden scene may have changed it
+    if (PS.Viewport.fit(this.scene.getGame())) this.onResize();
+    // First frame drawn with the shop ready: tell the platform the game can be played.
+    if (this.started) PS.Platform.gameReady();
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     // PS.simSteps > 1 runs the simulation several times per frame (automated tests only).
     // Paused while a rewarded ad is on screen.
-    const steps = PS.adPlaying ? 0 : PS.simSteps || 1;
+    const steps = PS.Pause.active() ? 0 : PS.simSteps || 1;
     for (let i = 0; i < steps; i++) {
       this.time += dt;
       PS.World.updateCustomers(this, dt);
