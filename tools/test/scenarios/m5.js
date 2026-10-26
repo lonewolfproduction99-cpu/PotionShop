@@ -12,7 +12,7 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, page }) => {
   const tut = () => evalG(() => {
     const T = gdjs.PotionShop.game.tutorial;
     const h = T.hand;
-    return { active: T.active, text: T.last, hand: h && !h.isHidden() ? [h.getX() + 36, h.getY() + 78] : null };
+    return { active: T.active && gdjs.PotionShop.game.state.tutorialPhase === 'first', text: (T.last || '').split('|')[0], hand: h && !h.isHidden() ? [h.getX() + 36, h.getY() + 70] : null };
   });
   await evalG(() => localStorage.clear());
   await reload();
@@ -46,8 +46,10 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, page }) => {
       await sleep(3000);
     }
   }
-  const after = await evalG(() => ({ served: gdjs.PotionShop.game.state.served, done: gdjs.PotionShop.game.state.tutorialDone }));
+  const after = await evalG(() => ({ served: gdjs.PotionShop.game.state.served, done: gdjs.PotionShop.game.state.tutorialPhase !== 'first' }));
   console.log('tutorial steps:\n  ' + seen.join('\n  '));
+  // The later tutorial phases are covered by the "tutorial" scenario.
+  await evalG(() => { const PS = gdjs.PotionShop; PS.Tutorial.finish(PS.game); });
   check('tutorial guides the player to the first sale', after.served >= 1 && after.done, JSON.stringify(after));
 
   // 2. Carried bottle and liquid tint during a normal brew.

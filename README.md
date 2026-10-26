@@ -68,7 +68,12 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 
 ## Polish (Milestone 5)
 
-- **First-time tutorial:** a bouncing hand and a banner guide new players through their first order, brew and delivery. The steps adapt to what the player does, and there's a Skip button.
+- **First-time tutorial:** a hand and a banner guide new players step by step. The hints adapt to what the player does, the current part is saved, and **Skip** ends it at any time.
+  1. Take an order, brew and deliver the first potion.
+  2. Brew a better potion: the hand shows how to add the recipe's bonus herb as a third ingredient for Fine quality, and warns that a wrong extra herb makes Poor quality or an accident.
+  3. Open the **Upgrades** tab and buy an upgrade. If none is affordable yet, an OK button moves on.
+  4. Open the **Herb shop** and buy the herb that is running lowest.
+  5. Visit the **Herb Garden** once it opens at shop level 2 (until then the tutorial waits quietly). Plant a herb, then learn about speed-ups and harvesting.
 - **Art:** a round iron cauldron on a stone fire pit. Its liquid takes each potion's color and flickers dark before an accident. Workers carry a real bottle in their hands, with a carrying pose.
 - **Audio:** a cozy background music loop, with separate Sounds and Music switches in Settings.
 - **Offline earnings:** with at least one apprentice, the shop earns part of your recent income while the game is closed, up to 2 hours. A "Welcome back!" panel collects it.
@@ -141,7 +146,7 @@ python3 tools/build_ui.py        # UI images   -> game/assets/ui
 python3 tools/build_sfx.py       # sounds and music -> game/assets/sfx
 python3 tools/build_project.py   # GDevelop project (embeds src/*.js as events)
 tools/export.sh <GDevelop portable app dir> docs   # HTML5 export with the official GDevelop CLI
-node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, m6, bot, showcase)
+node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, m6, tutorial, bot, showcase)
 ```
 
 Note: `build_project.py` regenerates `game/PotionShop.json`. If you edit the project in GDevelop, keep working in GDevelop or port your changes back to the tools.

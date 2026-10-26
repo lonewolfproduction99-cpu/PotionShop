@@ -57,6 +57,7 @@ PS.Garden = class {
       this.makePlant(p);
     });
     this.buildHud();
+    PS.Tutorial.init(this); // the garden part of the tutorial
   }
 
   // The shop's state and settings (so shared interface code works here too).
@@ -308,6 +309,7 @@ PS.Garden = class {
     this.gemText.setText(U.formatGold(this.state.gems));
     PS.FX.update(this, dt);
     PS.UI.updateTransient(this, dt);
+    PS.Tutorial.update(this, dt);
     // Panels with timers refresh twice per second.
     this.ui.refreshTimer -= dt;
     if (this.ui.panel && this.ui.refreshTimer <= 0) {

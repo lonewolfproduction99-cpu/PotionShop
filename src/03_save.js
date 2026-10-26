@@ -15,7 +15,7 @@ PS.Save = {
   KEY: 'save',
   VERSION: 2,
   META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes',
-    'discovered', 'accidents', 'tutorialDone', 'lastSeen', 'incomeRate', 'ads'],
+    'discovered', 'accidents', 'tutorialDone', 'tutorialPhase', 'lastSeen', 'incomeRate', 'ads'],
   RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers', 'garden', 'closed'],
 
   defaults() {
@@ -44,6 +44,7 @@ PS.Save = {
       accidents: 0,
       garden: [], // herb garden plots: { herb, readyAt (ms timestamp) }
       tutorialDone: false,
+      tutorialPhase: 'first', // current part of the tutorial (see 09_tutorial.js)
       closed: false, // the shop closed after satisfaction hit rock bottom
       ads: { day: '', count: 0 }, // rewarded ads watched today (daily limit)
       lastSeen: 0, // time of the last save (ms), for offline earnings
@@ -81,6 +82,7 @@ PS.Save = {
     if (Array.isArray(raw.discovered)) s.discovered = raw.discovered.filter((id) => PS.data.recipeById[id]);
     s.accidents = Math.floor(num(raw.accidents, 0, 0, 1e9));
     s.tutorialDone = raw.tutorialDone === true;
+    if (typeof raw.tutorialPhase === 'string' && raw.tutorialPhase.length < 20) s.tutorialPhase = raw.tutorialPhase;
     s.closed = raw.closed === true;
     if (raw.ads && typeof raw.ads === 'object') {
       s.ads = { day: String(raw.ads.day || ''), count: Math.floor(num(raw.ads.count, 0, 0, 999)) };
