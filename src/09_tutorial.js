@@ -40,9 +40,9 @@ PS.Tutorial = {
     const brewing = G.cauldrons.find((k) => k.state === 'brewing' || k.state === 'reserved');
     if (brewing) return { text: 'Brewing! The circular ring shows the progress.' };
     const idle = PS.Brewing.idleCauldron(G);
-    const uncovered = ordered.find((c) => PS.Brewing.plannedFor(G, c.recipe.id) === 0);
-    if (uncovered && idle) {
-      const name = uncovered.recipe.name;
+    const want = ordered.length ? PS.World.uncoveredItem(G, null) : null;
+    if (want && idle) {
+      const name = want.recipe.name;
       const article = /^[AEIOU]/.test(name) ? 'an ' : 'a ';
       return { text: 'They want ' + article + name + '. Tap the cauldron to brew it.', world: [idle.x, idle.y, 90] };
     }

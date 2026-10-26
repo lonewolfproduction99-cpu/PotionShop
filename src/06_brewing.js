@@ -220,7 +220,7 @@ PS.Brewing = {
 
   // Recipes the player knows (unlocked by shop level).
   knownRecipes(G) {
-    return PS.data.recipes.filter((r) => r.unlockLevel <= G.state.level);
+    return PS.data.recipes.filter((r) => r.unlockLevel <= G.state.level && r.prestige <= G.prestige());
   },
 
   idleCauldron(G) {

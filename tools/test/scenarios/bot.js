@@ -13,24 +13,30 @@ module.exports = async ({ sleep, evalG, shot }) => {
       // Take orders and collect finished potions.
       for (const c of G.customers) if (c.state === 'waitingOrder' && !PS.Workers.isQueued(G, 'takeOrder', c)) PS.Workers.enqueue(G, { type: 'takeOrder', target: c });
       for (const k of G.cauldrons) if (k.unlocked && k.state === 'done' && !PS.Workers.isQueued(G, 'collect', k)) PS.Workers.enqueue(G, { type: 'collect', target: k });
-      for (const c of PS.World.pendingOrders(G)) if (!c.deliveryReserved && (s.stock[c.recipe.id] || 0) > 0 && !PS.Workers.isQueued(G, 'fetchStock', c)) PS.Workers.enqueue(G, { type: 'fetchStock', target: c });
-      // Brew for uncovered orders.
+      for (const c of PS.World.pendingOrders(G)) {
+        for (const it of PS.Order.needsAny(c)) {
+          if ((s.stock[it.recipe.id] || 0) > 0 && !PS.Workers.isQueued(G, 'fetchStock', c, it.recipe)) {
+            PS.Workers.enqueue(G, { type: 'fetchStock', target: c, recipe: it.recipe });
+            break;
+          }
+        }
+      }
+      // Brew for potions nobody is making yet.
       for (const k of G.cauldrons) {
         if (!k.unlocked || k.state !== 'idle') continue;
-        const orders = PS.World.pendingOrders(G).concat(G.customers.filter((c) => c.state === 'waitingOrder'));
-        const want = orders.find((o) => PS.Brewing.plannedFor(G, o.recipe.id) < orders.filter((x) => x.recipe.id === o.recipe.id).length && PS.Brewing.canBrew(G, o.recipe));
+        const want = PS.World.uncoveredItem(G, (r) => PS.Brewing.canBrew(G, r));
         if (want) PS.Brewing.request(G, k, PS.Brewing.bestIngredients(G, want.recipe));
       }
       // Restock herbs used by known recipes.
       const needed = new Set(PS.Brewing.knownRecipes(G).flatMap((r) => r.ingredients));
       for (const id of needed) {
         const ing = PS.data.ingredientById[id];
-        if ((s.inventory[id] || 0) < 3 && s.inventory[id] + ing.bundle <= G.storageCap() && s.gold >= ing.cost * ing.bundle + 10) { G.addGold(-ing.cost * ing.bundle); s.inventory[id] += ing.bundle; }
+        if ((s.inventory[id] || 0) < 3 && s.inventory[id] + ing.bundle <= G.storageCap() && s.gold >= G.herbCost(ing) + 10) { G.addGold(-G.herbCost(ing)); s.inventory[id] += ing.bundle; }
       }
       // Hire apprentices, then train them.
       const next = G.nextWorkerType();
-      if (next && s.level >= next.minShopLevel && s.gold >= next.hireCost + 40) {
-        window.__bot.buys.push([Math.round(G.time), 'hire ' + next.name, next.hireCost]);
+      if (next && s.level >= next.minShopLevel && s.gold >= G.hireCost(next) + 40) {
+        window.__bot.buys.push([Math.round(G.time), 'hire ' + next.name, G.hireCost(next)]);
         G.hireWorker();
       }
       // Buy upgrades when comfortably rich (keep a herb budget).

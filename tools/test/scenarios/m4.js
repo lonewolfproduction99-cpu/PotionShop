@@ -24,7 +24,7 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, tapWorld }) => {
   };
   const seatOrdered = (recipeId) => evalG((rid) => {
     const PS = gdjs.PotionShop; const G = PS.game;
-    const c = PS.World.spawnCustomer(G); c.recipe = PS.data.recipeById[rid];
+    const c = PS.World.spawnCustomer(G); PS.Order.set(c, [PS.data.recipeById[rid]]);
     const seat = PS.World.freeSeat(G); c.obj.setPosition(seat.x, seat.y); PS.World.sendToSeat(G, c, seat); c.path = [];
     c.state = 'ordered'; c.orderedAt = G.time; c.patience = c.maxPatience; c.obj.setZ(PS.K.sitZ); PS.setAnim(c, 'Sit');
     return c.id;
@@ -108,7 +108,11 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, tapWorld }) => {
   const inGarden = await evalG(() => !!gdjs.PotionShop.game.scene.getGame().getSceneStack().getCurrentScene().__garden);
   check('garden scene opens', inGarden);
   await shot('75_garden');
-  const plot = await evalG(() => { const g = gdjs.PotionShop.game.scene.getGame().getSceneStack().getCurrentScene().__garden; const p = g.plots[4]; return { x: p.x, y: p.y, herb: p.state.herb }; });
+  const plot = await evalG(() => { const g = gdjs.PotionShop.game.scene.getGame().getSceneStack().getCurrentScene().__garden; const p = g.plots[4];
+    // Plots start empty (Milestone 6): plant Redleaf and make it ripe.
+    g.shop.state.gold += 100; g.plant(p, gdjs.PotionShop.data.ingredientById.redleaf); g.finishNow(p);
+    return { x: p.x, y: p.y, herb: p.state.herb }; });
+  await sleep(500);
   const sp = await evalG(([x, y]) => gdjs.PotionShop.proj.toScreen(x, y, 25), [plot.x, plot.y]);
   await tapGame(sp[0], sp[1]);
   await sleep(1500);

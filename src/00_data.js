@@ -19,6 +19,7 @@ PS.loadData = function (runtimeScene) {
     icon: String(r.Icon || 'potion_sludge'),
     unlockLevel: Number(r.UnlockLevel) || 1,
     bonus: r.Bonus ? String(r.Bonus) : null, // extra herb that makes it Fine quality
+    prestige: Number(r.Prestige) || 0, // prestige needed before customers ask for it
   }));
   const ingredients = (read('Ingredients') || []).map((i) => ({
     id: String(i.Id),
@@ -28,6 +29,8 @@ PS.loadData = function (runtimeScene) {
     icon: String(i.Icon || 'ing_redleaf'),
     unlockLevel: Number(i.UnlockLevel) || 1,
     rare: !!i.Rare,
+    prestige: Number(i.Prestige) || 0,
+    growTime: Number(i.GrowTime) || 30, // seconds in the herb garden
   }));
   const customers = (read('CustomerTypes') || []).map((c) => ({
     id: String(c.Id),
@@ -51,6 +54,23 @@ PS.loadData = function (runtimeScene) {
     minShopLevel: Number(u.MinShopLevel) || 1,
     persistent: !!u.Persistent, // kept when the shop is prestiged
   }));
+  // Potion Mastery: one permanent price upgrade per potion (kept after prestige).
+  for (const r of recipes) {
+    upgrades.push({
+      id: 'mastery_' + r.id,
+      name: r.name.replace(' Potion', '') + ' Mastery',
+      desc: '+15% price for ' + r.name + '. Kept after prestige.',
+      icon: r.icon,
+      tab: 'mastery',
+      baseCost: r.price * 25,
+      costGrowth: 1.9,
+      maxLevel: 10,
+      effect: 0.15,
+      minShopLevel: r.unlockLevel,
+      persistent: true,
+      prestige: r.prestige,
+    });
+  }
   const workerTypes = (read('WorkerTypes') || []).map((w) => ({
     id: String(w.Id),
     object: String(w.Object),
@@ -84,6 +104,16 @@ PS.loadData = function (runtimeScene) {
     gardenRegrow: Number(b.GardenRegrow) || 45, // seconds for a garden plot to regrow
     gardenRareChance: Number(b.GardenRareChance) || 0.08,
     gardenLevel: Number(b.GardenLevel) || 2,
+    prestigeCostMult: Number(b.PrestigeCostMult) || 5, // shop upgrade costs x5 per prestige
+    prestigePriceMult: Number(b.PrestigePriceMult) || 3, // potion prices x3 per prestige
+    prestigeHerbMult: Number(b.PrestigeHerbMult) || 2,
+    prestigeGems: Number(b.PrestigeGems) || 20, // gems for prestige N: N x this
+    levelGems: Number(b.LevelGems) || 3,
+    giftChance: Number(b.GiftChance) || 0.3, // special herb from a delighted customer
+    closeAt: Number(b.CloseAt) || 8, // satisfaction % that closes the shop
+    reopenGems: Number(b.ReopenGems) || 15,
+    adDailyLimit: Number(b.AdDailyLimit) || 10,
+    harvestRareChance: Number(b.HarvestRareChance) || 0.12,
   };
 
   PS.data = {

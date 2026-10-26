@@ -36,7 +36,7 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, tapWorld }) => {
   // Expansion: buy a table; a 4th table becomes visible.
   await tapHit('tab:expand', 'hud');
   await tapHit('upgrade:extra_table');
-  const tables = await evalG(() => gdjs.PotionShop.game.seats.filter((x) => x.unlocked && !x.obj.isHidden()).length);
+  const tables = await evalG(() => gdjs.PotionShop.game.slots.filter((x) => x.unlocked && !x.group.isHidden()).length);
   check('extra table appears', tables === 4, 'tables=' + tables);
   // Cauldron is locked until shop level 2.
   const lockedTag = await evalG(() => !!gdjs.PotionShop.game.ui.panel.hits.find((h) => h.label === 'upgrade:extra_cauldron'));
@@ -62,7 +62,7 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, tapWorld }) => {
     const PS = gdjs.PotionShop; const G = PS.game;
     const wants = ['healing', 'mana', 'healing', 'energy', 'mana', 'energy', 'healing'];
     wants.forEach((id) => {
-      const c = PS.World.spawnCustomer(G); c.recipe = PS.data.recipeById[id];
+      const c = PS.World.spawnCustomer(G); PS.Order.set(c, [PS.data.recipeById[id]]);
       c.obj.setPosition(G.doorOutside[0], G.doorOutside[1]); c.path = []; PS.World.onArrivedAtDoor(G, c);
     });
     PS.simSteps = 6;

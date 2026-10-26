@@ -100,6 +100,49 @@ PS.Workers = {
     return null;
   },
 
+  // Is this job already being done or queued by any worker? `recipe` tells
+  // apart the potions of one multi-potion order.
+  isQueued(G, type, target, recipe) {
+    const same = (t) => t.type === type && t.target === target && (!recipe || !t.recipe || t.recipe === recipe);
+    for (const w of G.workers) {
+      if (w.task && same(w.task)) return true;
+      if (w.queue.some(same)) return true;
+    }
+    return false;
+  },
+
+  // Player taps become tasks in the owner's queue.
+  enqueue(G, task, front) {
+    const w = G.owner;
+    if (this.isQueued(G, task.type, task.target, task.recipe)) {
+      PS.UI.toast(G, 'Already on it!');
+      return false;
+    }
+    if (w.queue.length >= this.MAX_QUEUE) {
+      PS.UI.toast(G, 'Task list is full');
+      return false;
+    }
+    if (front) w.queue.unshift(task);
+    else w.queue.push(task);
+    PS.Audio.play(G, 'tap');
+    return true;
+  },
+
+  // Position of a target in the owner's plan (1 = current task), 0 if absent.
+  planIndex(G, target) {
+    const w = G.owner;
+    let idx = 0;
+    if (w.task) {
+      idx++;
+      if (w.task.target === target) return idx;
+    }
+    for (const t of w.queue) {
+      idx++;
+      if (t.target === target) return idx;
+    }
+    return 0;
+  },
+
   statMult(w, stat) {
     if (w.isOwner) return 1;
     return 1 + 0.15 * (w.record.stats[stat] || 0);
@@ -110,7 +153,7 @@ PS.Workers = {
     const role = w.record.role;
     const service = role === 'all' || role === 'service';
     const brew = role === 'all' || role === 'brew';
-    const free = (type, target) => !this.isQueued(G, type, target);
+    const free = (type, target, recipe) => !this.isQueued(G, type, target, recipe);
     const d = (x, y) => U.dist(w.obj.getX(), w.obj.getY(), x, y);
     const options = [];
     if (brew) {
@@ -121,8 +164,11 @@ PS.Workers = {
     }
     if (service) {
       for (const c of PS.World.pendingOrders(G)) {
-        if (!c.deliveryReserved && (G.state.stock[c.recipe.id] || 0) > 0 && free('fetchStock', c)) {
-          options.push({ p: 1, dist: d(G.counter.x, G.counter.y), task: { type: 'fetchStock', target: c } });
+        for (const it of PS.Order.needsAny(c)) {
+          if ((G.state.stock[it.recipe.id] || 0) > 0 && free('fetchStock', c, it.recipe)) {
+            options.push({ p: 1, dist: d(G.counter.x, G.counter.y), task: { type: 'fetchStock', target: c, recipe: it.recipe } });
+            break;
+          }
         }
       }
       for (const c of G.customers) {
@@ -147,75 +193,17 @@ PS.Workers = {
     }
   },
 
-  // The oldest order (or seated customer) whose potion nobody is making yet,
-  // and the nearest idle cauldron to brew it in.
+  // The oldest wanted potion nobody is making yet, and the nearest idle
+  // cauldron to brew it in.
   brewJob(G, w) {
     const cauldrons = G.cauldrons.filter((c) => c.unlocked && c.state === 'idle');
     if (!cauldrons.length) return null;
-    const demand = PS.World.pendingOrders(G).concat(G.customers.filter((c) => c.state === 'waitingOrder'));
-    const counted = {};
-    for (const c of demand) {
-      const id = c.recipe.id;
-      counted[id] = (counted[id] || 0) + 1;
-      if (PS.Brewing.plannedFor(G, id) < counted[id] && PS.Brewing.canBrew(G, c.recipe)) {
-        cauldrons.sort((a, b) => U.dist(w.obj.getX(), w.obj.getY(), a.x, a.y) - U.dist(w.obj.getX(), w.obj.getY(), b.x, b.y));
-        return { cauldron: cauldrons[0], recipe: c.recipe };
-      }
-    }
-    return null;
+    const want = PS.World.uncoveredItem(G, (r) => PS.Brewing.canBrew(G, r));
+    if (!want) return null;
+    cauldrons.sort((a, b) => U.dist(w.obj.getX(), w.obj.getY(), a.x, a.y) - U.dist(w.obj.getX(), w.obj.getY(), b.x, b.y));
+    return { cauldron: cauldrons[0], recipe: want.recipe };
   },
 
-  // Is a task with this type/target already queued or running?
-  isQueued(G, type, target) {
-    for (const w of G.workers) {
-      if (w.task && w.task.type === type && w.task.target === target) return true;
-      if (w.queue.some((t) => t.type === type && t.target === target)) return true;
-    }
-    return false;
-  },
-
-  queuedCount(G, target) {
-    let n = 0;
-    for (const w of G.workers) {
-      if (w.task && w.task.target === target) n++;
-      n += w.queue.filter((t) => t.target === target).length;
-    }
-    return n;
-  },
-
-  // Add a task for the owner. Returns false when refused.
-  enqueue(G, task, front) {
-    const w = G.owner;
-    if (this.isQueued(G, task.type, task.target)) {
-      PS.UI.toast(G, 'Already on it!');
-      return false;
-    }
-    if (w.queue.length >= this.MAX_QUEUE) {
-      PS.UI.toast(G, 'Task list is full');
-      return false;
-    }
-    if (front) w.queue.unshift(task);
-    else w.queue.push(task);
-    PS.Audio.play(G, 'tap');
-    return true;
-  },
-
-  // Index (1-based) of a task in the owner's plan, for the number badges.
-  planIndex(G, target) {
-    const w = G.owner;
-    let idx = 0;
-    if (w.task) {
-      idx++;
-      if (w.task.target === target) return idx;
-    }
-    for (const t of w.queue) {
-      idx++;
-      if (t.target === target) return idx;
-    }
-    return 0;
-  },
-
-  // Where the worker stands to perform a task, and which way it faces.
   taskSpot(G, task, w) {
     const t = task.target;
     const offset = w && !w.isOwner ? (w.index % 2 ? 1 : -1) * 18 * Math.ceil(w.index / 2) : 0;
@@ -242,7 +230,7 @@ PS.Workers = {
       case 'takeOrder':
         return t.state === 'waitingOrder' && !!t.seat;
       case 'deliver':
-        return t.state === 'ordered' && !!t.seat;
+        return t.state === 'ordered' && !!t.seat && PS.Order.wants(t, task.recipe.id);
       case 'startBrew':
         return t.state === 'reserved';
       case 'collect':
@@ -250,7 +238,7 @@ PS.Workers = {
       case 'clean':
         return t.state === 'dirty';
       case 'fetchStock':
-        return t.state === 'ordered' && (G.state.stock[t.recipe.id] || 0) > 0;
+        return t.state === 'ordered' && !!PS.Order.need(t, task.recipe.id) && (G.state.stock[task.recipe.id] || 0) > 0;
       case 'store':
         return true;
     }
@@ -331,7 +319,7 @@ PS.Workers = {
           // Before storing, check whether a customer ordered this potion meanwhile.
           const c = this.findCustomerFor(G, task.recipe);
           if (c) {
-            c.deliveryReserved = true;
+            PS.Order.reserve(c, task.recipe.id);
             this.begin(G, w, { type: 'deliver', target: c, recipe: task.recipe });
             continue;
           }
@@ -391,11 +379,16 @@ PS.Workers = {
         t.state = 'ordered';
         t.orderedAt = G.time;
         t.patience = Math.min(t.maxPatience, t.patience + t.maxPatience * 0.15);
-        PS.UI.floatText(G, t.obj.getX(), t.obj.getY(), 100, t.recipe.name, t.recipe.icon);
-        // A matching potion is already waiting on the counter: bring it.
-        if ((G.state.stock[t.recipe.id] || 0) > 0 && !this.isQueued(G, 'fetchStock', t)) {
-          if (w.isOwner) this.enqueue(G, { type: 'fetchStock', target: t }, true);
-          else this.begin(G, w, { type: 'fetchStock', target: t });
+        PS.UI.floatText(G, t.obj.getX(), t.obj.getY(), 100,
+          t.items.length > 1 ? t.items.length + ' potions' : t.recipe.name, t.recipe.icon);
+        // A wanted potion is already waiting on the counter: bring it.
+        {
+          const it = PS.Order.needsAny(t).find((i) => (G.state.stock[i.recipe.id] || 0) > 0);
+          if (it && !this.isQueued(G, 'fetchStock', t, it.recipe)) {
+            const job = { type: 'fetchStock', target: t, recipe: it.recipe };
+            if (w.isOwner) this.enqueue(G, job, true);
+            else this.begin(G, w, job);
+          }
         }
         PS.UI.markDirty(G);
         break;
@@ -411,17 +404,15 @@ PS.Workers = {
         if (w.carrying) this.assignDelivery(G, w);
         break;
       case 'fetchStock':
-        if ((G.state.stock[t.recipe.id] || 0) > 0) {
-          w.carryQuality = PS.Stock.take(G, t.recipe.id);
-          w.carrying = t.recipe;
-          this.begin(G, w, { type: 'deliver', target: t, recipe: t.recipe });
-          t.deliveryReserved = true;
+        if ((G.state.stock[task.recipe.id] || 0) > 0 && PS.Order.reserve(t, task.recipe.id)) {
+          w.carryQuality = PS.Stock.take(G, task.recipe.id);
+          w.carrying = task.recipe;
+          this.begin(G, w, { type: 'deliver', target: t, recipe: task.recipe });
         }
         PS.UI.markDirty(G);
         break;
       case 'deliver':
-        if (w.carrying && t.state === 'ordered') {
-          PS.World.serve(G, t, w.carrying, w.carryQuality);
+        if (w.carrying && t.state === 'ordered' && PS.World.deliverItem(G, t, w.carrying, w.carryQuality)) {
           w.carrying = null;
         } else {
           this.retargetDelivery(G, w, task);
@@ -436,7 +427,7 @@ PS.Workers = {
 
   // First-in-first-out: the oldest order for this potion gets it.
   findCustomerFor(G, recipe) {
-    return PS.World.pendingOrders(G).find((c) => c.recipe.id === recipe.id && !c.deliveryReserved) || null;
+    return PS.World.pendingOrders(G).find((c) => PS.Order.need(c, recipe.id)) || null;
   },
 
   assignDelivery(G, w) {
@@ -448,7 +439,7 @@ PS.Workers = {
     }
     const c = this.findCustomerFor(G, r);
     if (c) {
-      c.deliveryReserved = true;
+      PS.Order.reserve(c, r.id);
       this.begin(G, w, { type: 'deliver', target: c, recipe: r });
     } else {
       // Nobody is waiting for it yet: put it on the counter for later.
@@ -457,9 +448,7 @@ PS.Workers = {
   },
 
   retargetDelivery(G, w, task) {
-    if (task.target && task.target.deliveryReserved && task.target.state === 'ordered') {
-      task.target.deliveryReserved = false;
-    }
+    if (task.type === 'deliver' && task.target && task.target.items) PS.Order.unreserve(task.target, task.recipe.id);
     w.task = null;
     if (w.carrying) this.assignDelivery(G, w);
   },

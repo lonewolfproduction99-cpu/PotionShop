@@ -15,8 +15,8 @@ PS.Save = {
   KEY: 'save',
   VERSION: 2,
   META_KEYS: ['level', 'xp', 'served', 'lost', 'earned', 'satisfaction', 'prestige', 'gems', 'seenRecipes',
-    'discovered', 'accidents', 'tutorialDone', 'lastSeen', 'incomeRate'],
-  RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers', 'garden'],
+    'discovered', 'accidents', 'tutorialDone', 'lastSeen', 'incomeRate', 'ads'],
+  RUN_KEYS: ['gold', 'inventory', 'upgrades', 'stock', 'workers', 'garden', 'closed'],
 
   defaults() {
     const d = PS.data;
@@ -44,6 +44,8 @@ PS.Save = {
       accidents: 0,
       garden: [], // herb garden plots: { herb, readyAt (ms timestamp) }
       tutorialDone: false,
+      closed: false, // the shop closed after satisfaction hit rock bottom
+      ads: { day: '', count: 0 }, // rewarded ads watched today (daily limit)
       lastSeen: 0, // time of the last save (ms), for offline earnings
       incomeRate: 0, // recent gold earned per minute
     };
@@ -57,7 +59,7 @@ PS.Save = {
       return Number.isFinite(n) ? PS.util.clamp(n, min, max) : def;
     };
     s.gold = num(raw.gold, s.gold, 0, 1e12);
-    s.level = Math.floor(num(raw.level, 1, 1, 99));
+    s.level = Math.floor(num(raw.level, 1, 1, 999));
     s.xp = num(raw.xp, 0, 0, 1e9);
     s.served = Math.floor(num(raw.served, 0, 0, 1e9));
     s.lost = Math.floor(num(raw.lost, 0, 0, 1e9));
@@ -79,12 +81,18 @@ PS.Save = {
     if (Array.isArray(raw.discovered)) s.discovered = raw.discovered.filter((id) => PS.data.recipeById[id]);
     s.accidents = Math.floor(num(raw.accidents, 0, 0, 1e9));
     s.tutorialDone = raw.tutorialDone === true;
+    s.closed = raw.closed === true;
+    if (raw.ads && typeof raw.ads === 'object') {
+      s.ads = { day: String(raw.ads.day || ''), count: Math.floor(num(raw.ads.count, 0, 0, 999)) };
+    }
     s.lastSeen = num(raw.lastSeen, 0, 0, 1e15);
     s.incomeRate = num(raw.incomeRate, 0, 0, 1e12);
     if (Array.isArray(raw.garden)) {
       s.garden = raw.garden.slice(0, 16).map((p) => ({
-        herb: p && PS.data.ingredientById[p.herb] ? p.herb : 'redleaf',
+        herb: p && PS.data.ingredientById[p.herb] ? p.herb : null,
         readyAt: num(p && p.readyAt, 0, 0, 1e15),
+        // Older saves had no `planted` flag: their plots were always growing.
+        planted: p && p.planted !== undefined ? !!p.planted : !!(p && PS.data.ingredientById[p.herb]),
       }));
     }
     s.gems = Math.floor(num(raw.gems, 0, 0, 1e9));

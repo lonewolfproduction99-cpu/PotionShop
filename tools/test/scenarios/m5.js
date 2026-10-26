@@ -54,7 +54,7 @@ module.exports = async ({ shot, sleep, state, evalG, tapGame, page }) => {
   await evalG(() => {
     const PS = gdjs.PotionShop; const G = PS.game; G.spawnTimer = 1e9;
     G.state.upgrades.extra_table = 3; PS.World.applyUnlocks(G);
-    const c = PS.World.spawnCustomer(G); c.recipe = PS.data.recipeById.energy;
+    const c = PS.World.spawnCustomer(G); PS.Order.set(c, [PS.data.recipeById.energy]);
     const seat = PS.World.freeSeat(G); c.obj.setPosition(seat.x, seat.y); PS.World.sendToSeat(G, c, seat); c.path = [];
     c.state = 'ordered'; c.orderedAt = G.time; c.patience = c.maxPatience;
     PS.Brewing.request(G, G.cauldrons[0], ['sunroot', 'sparkdust']);

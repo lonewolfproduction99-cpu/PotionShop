@@ -26,8 +26,8 @@ PS.util = {
 // Layout constants (world units) matching the generated 3D models.
 PS.K = {
   seatOffsetY: -48.6, // chair seat relative to its table
-  tableStandX: 56, // where a worker stands beside a table (towards the aisle)
-  tableStandY: -35,
+  tableStandSouth: 56, // workers stand on the south side of a table, facing the customer
+  chairSpacing: 40, // between chairs of a long table
   cauldronStandY: 78, // where a worker stands in front of a cauldron
   liquidZ: 56, // liquid surface height inside a cauldron
   liquidRise: 9,

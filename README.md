@@ -35,7 +35,7 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
   - Night Vision (5) and Fire Shield (6).
 - **Herb pantry:** 20 of each herb to start; the Bigger Pantry upgrade adds 10 per level. The bag icon in the top bar warns when a known recipe can't be brewed.
 - **Upgrades:** Quick Brew, Swift Shoes, Quick Hands, Cozy Decor, Fine Bottles and Bigger Pantry, with costs that rise each level.
-- **Expansion:** up to 6 tables and 3 cauldrons. They appear in the shop when bought.
+- **Expansion:** up to 6 table slots and 3 cauldrons. They appear in the shop when bought.
 - **Customers:** 7 types (some arrive from later levels) with different patience, tips and speed. When all tables are full, up to 4 customers queue outside the door and come in first-come, first-served.
 
 ## Workers (Milestone 3)
@@ -63,7 +63,7 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 - **Upgrades:** Safety Goggles (fewer accidents) and Master Brewer (a chance of one quality level higher).
 - **Herb Garden** (Herb shop → *Visit the Herb Garden*, from shop level 2): a separate `Garden` scene shown on top of the paused shop.
   - Tap a ripe plant to gather it, with a circular progress ring.
-  - Plots regrow in 45 seconds of real time, and rare herbs glow. The well gives Moonwater.
+  - Plots regrow in real time, and rare herbs glow. The well gives Moonwater. (Since Milestone 6 you choose what to plant; see below.)
   - Herbs go into the shop's pantry.
 
 ## Polish (Milestone 5)
@@ -75,6 +75,39 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 - **Busier when happy:** high satisfaction brings customers a little more often.
 - **Big numbers** display as 12.3k, 4.6M, 1.2B and 3.4T, ready for prestige costs.
 - **Performance:** the number of effect particles is capped. Shadows can be turned off in Settings.
+
+## Prestige, long tables and the garden (Milestone 6)
+
+- **Prestige** (Expand tab → *Prestige*): unlocks once every shop upgrade is maxed and every apprentice is hired. The details panel lists what is still missing.
+  - **Kept:** shop level, gems, **Potion Mastery**, discovered recipes and stats.
+  - **Reset:** gold, herbs, shop upgrades, tables, cauldrons, apprentices and the garden.
+  - Each prestige gives gems (20 × the new prestige level). The top bar shows the prestige level under the star (P1, P2, ...).
+- **Scaling per prestige:**
+  - potions sell for 3× more;
+  - shop upgrades and apprentices cost 5× more;
+  - herbs cost 2× more;
+  - customers are a little less patient.
+  - Costs reach millions after a few prestiges.
+- **Potion Mastery** (Upgrades → *Mastery*): +15% price per level for one potion, up to level 10. Kept forever.
+- **Long tables:** after prestige 1, each table becomes a long table with 2 seats, then 3, 4 and 5 (the maximum). Small decorations in the way are put aside.
+- **Bigger orders:** a customer may order up to 1 potion per prestige level plus one (5 at most). They pay and leave only once every potion has arrived.
+  - Their bubble shows each potion and ticks off delivered ones.
+  - Workers deliver and brew each potion separately.
+- **6 prestige potions:**
+  - Frost and Love (prestige 1);
+  - Invisibility and Luck (prestige 2);
+  - Dragon and Grand Elixir (prestige 3).
+  - They come with 5 new herbs: Frostberry, Emberpepper, Shadowmoss, Lucky Clover and Dragonscale.
+- **Gifts:** a customer served before their patience drops below 90% has a 30% chance to leave a special herb (Starbloom or Glowcap) on top of paying.
+- **Shop closing:** if satisfaction falls to 8% or lower, the shop closes and no new customers come.
+  - Customers already inside can still be served.
+  - Reopen with gold, 15 gems or a rewarded ad. Satisfaction restarts at 55%.
+- **Garden planting:** plots start empty. Tap a plot to pick a herb and pay for its seeds. Rarer herbs grow longer: from 30 seconds for Redleaf to more than 6 minutes for Dragonscale.
+  - Tap a growing plot to speed it up: finish now with gems or gold, or watch an ad to halve the time left.
+  - Each harvest gives 4 herbs (5 from shop level 8), with a 12% chance of a bonus special herb. The well still gives Moonwater on its own.
+- **Gems:** earned on level-ups (3 each) and prestiges. They are used to reopen the shop and to finish garden plots.
+- **Rewarded ads:** always optional, limited to 10 per day. This web build shows a 3-second placeholder; real ads, an ad-free option and coin packs need the mobile app build (a later milestone).
+- **Narrow phones:** on narrow screens the satisfaction meter moves to the second row of the top bar.
 
 ## Project structure
 
@@ -91,7 +124,11 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 
 ### Editing in GDevelop
 
-- **Recipes, ingredients, customer types, upgrades and balance values** are in **Project manager → Global variables**: `Recipes`, `Ingredients`, `CustomerTypes`, `Upgrades` and `Balance`. To add a potion, add a `Recipes` entry and give it a potion icon animation in the `Icon` object.
+- **Recipes, ingredients, customer types, upgrades and balance values** are in **Project manager → Global variables**: `Recipes`, `Ingredients`, `CustomerTypes`, `Upgrades`, `WorkerTypes` and `Balance`. To add a potion, add a `Recipes` entry and give it a potion icon animation in the `Icon` object.
+  - `Prestige` on a recipe or herb sets the prestige level that unlocks it.
+  - `GrowTime` on a herb is its garden growing time in seconds.
+  - The prestige multipliers, gem rewards, gift chance, closing threshold and daily ad limit are in `Balance`.
+- **Long tables** are the `TableGroup2` to `TableGroup5` objects. They replace each `TableSet` at runtime after prestiges.
 - **Tables (`TableSet`) and cauldrons (`Cauldron`)** are placed in the `Shop` scene. Their `Order` instance variable is the order in which they are bought. Furniture in the `NavObstacles` group automatically blocks walking.
 - **Walls and waypoints** (door, queue spots, spawn points, the owner's home spot) are on the hidden `Nav` layer.
 - **Game logic** lives in the JavaScript events of the `Shop` scene: data, utilities, navigation (A* pathfinding), save system, world (customers, seating, queue, patience), workers (task queue), brewing, interface, and the main loop.
@@ -104,7 +141,7 @@ python3 tools/build_ui.py        # UI images   -> game/assets/ui
 python3 tools/build_sfx.py       # sounds and music -> game/assets/sfx
 python3 tools/build_project.py   # GDevelop project (embeds src/*.js as events)
 tools/export.sh <GDevelop portable app dir> docs   # HTML5 export with the official GDevelop CLI
-node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, bot, showcase)
+node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, m6, bot, showcase)
 ```
 
 Note: `build_project.py` regenerates `game/PotionShop.json`. If you edit the project in GDevelop, keep working in GDevelop or port your changes back to the tools.

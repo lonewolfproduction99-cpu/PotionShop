@@ -152,10 +152,19 @@ PS.UI = {
     this.panelBox(G, 'PanelDark', 234, 14, 150, 66, L, 10);
     this.icon(G, 'icon_star', 266, 42, 46, L, 'UI', 11);
     hud.level = this.text(G, 'Lv 1', 292, 20, 86, 32, '255;255;255', 'left', L, 'UI', 11, '40;24;16');
+    hud.prestige = this.text(G, '', 236, 52, 60, 20, COLORS.gold, 'center', L, 'UI', 12, '40;24;16');
     hud.xp = this.bar(G, L, 292, 58, 82, 12, 0, '120;200;255', 'UI', 11);
-    this.panelBox(G, 'PanelDark', 392, 14, 136, 66, L, 10);
-    hud.mood = this.icon(G, 'mood_happy', 424, 47, 46, L, 'UI', 11);
-    hud.sat = this.text(G, '80%', 450, 26, 74, 30, '255;255;255', 'left', L, 'UI', 11, '40;24;16');
+    // Satisfaction: next to the level, or on the second row on narrow phones.
+    if (W >= 700) {
+      this.panelBox(G, 'PanelDark', 392, 14, 136, 66, L, 10);
+      hud.mood = this.icon(G, 'mood_happy', 424, 47, 46, L, 'UI', 11);
+      hud.sat = this.text(G, '80%', 450, 26, 74, 30, '255;255;255', 'left', L, 'UI', 11, '40;24;16');
+    } else {
+      this.panelBox(G, 'PanelDark', 394, 88, 120, 44, L, 10);
+      hud.mood = this.icon(G, 'mood_happy', 418, 110, 32, L, 'UI', 11);
+      hud.sat = this.text(G, '80%', 438, 96, 72, 26, '255;255;255', 'left', L, 'UI', 11, '40;24;16');
+      this.hit(hud.hits, 394, 88, 120, 44, () => this.toggle(G, 'stats'));
+    }
     // Ingredient shortcut and settings
     this.panelBox(G, 'BtnBlue', W - 160, 12, 70, 70, L, 10);
     this.icon(G, 'icon_bag', W - 125, 44, 48, L, 'UI', 11);
@@ -166,8 +175,16 @@ PS.UI = {
     this.hit(hud.hits, W - 82, 12, 70, 70, () => this.toggle(G, 'settings'));
     this.hit(hud.hits, 12, 14, 516, 66, () => this.toggle(G, 'stats'));
     // Task list indicator under the top bar
-    hud.taskBack = this.panelBox(G, 'PanelDark', 12, 88, 220, 44, L, 10);
-    hud.taskText = this.text(G, '', 22, 96, 200, 24, '255;255;255', 'left', L, 'UI', 11);
+    this.panelBox(G, 'PanelDark', 12, 88, 130, 44, L, 10);
+    this.icon(G, 'icon_quality', 36, 110, 30, L, 'UI', 11);
+    hud.gems = this.text(G, '0', 56, 96, 80, 26, '170;230;255', 'left', L, 'UI', 11, '40;24;16');
+    hud.taskBack = this.panelBox(G, 'PanelDark', 150, 88, 236, 44, L, 10);
+    hud.taskText = this.text(G, '', 160, 96, 220, 24, '255;255;255', 'left', L, 'UI', 11);
+    // Shown while the shop is closed (satisfaction hit rock bottom).
+    hud.closed = this.panelBox(G, 'BtnRed', W / 2 - 230, 144, 460, 58, L, 30);
+    hud.closedText = this.text(G, 'SHOP CLOSED · tap to reopen', W / 2 - 230, 157, 460, 28, '255;255;255', 'center', L, 'UI', 31,
+      '90;20;20');
+    this.hit(hud.hits, W / 2 - 230, 144, 460, 58, () => G.state.closed && this.open(G, 'closed'), 'closed');
     // Bottom navigation
     const tabs = [
       ['orders', 'icon_orders', 'Orders'],
@@ -199,6 +216,10 @@ PS.UI = {
     const s = G.state;
     hud.gold.setText(U.formatGold(s.gold));
     hud.level.setText('Lv ' + s.level);
+    hud.prestige.setText(s.prestige ? 'P' + s.prestige : '');
+    hud.gems.setText(U.formatGold(s.gems));
+    hud.closed.hide(!s.closed);
+    hud.closedText.hide(!s.closed);
     const need = PS.xpForLevel(s.level);
     hud.xp.fill.setWidth(Math.max(8, 78 * U.clamp(s.xp / need, 0, 1)));
     const sat = Math.round(s.satisfaction);
@@ -309,6 +330,16 @@ PS.UI = {
         return this.buildLevelUp(G, P);
       case 'offline':
         return this.buildOffline(G, P);
+      case 'prestige':
+        return this.buildPrestige(G, P);
+      case 'closed':
+        return this.buildClosed(G, P);
+      case 'ad':
+        return this.buildAd(G, P);
+      case 'plant':
+        return PS.GardenUI.buildPlant(G, P);
+      case 'speedup':
+        return PS.GardenUI.buildSpeedup(G, P);
     }
   },
 
@@ -349,7 +380,7 @@ PS.UI = {
     const ready = slots[0] && slots[1];
     if (ready) {
       const result = PS.findRecipe([slots[0], slots[1]]);
-      const known = result && result.unlockLevel <= G.state.level;
+      const known = result && result.unlockLevel <= G.state.level && result.prestige <= G.prestige();
       this.icon(G, result && known ? result.icon : 'potion_sludge', xs[3] + sz / 2, y + sz / 2, 74, P.items, 'UI', 17);
       let label;
       let color = COLORS.ink;
@@ -388,7 +419,9 @@ PS.UI = {
     // Ingredients: unlocked herbs plus any rare herb in stock.
     this.text(G, 'Ingredients  (a 3rd herb is optional)', area.x, y, area.w, 26, COLORS.ink, 'left', P.items, 'UI', 16);
     y += 34;
-    const ings = PS.data.ingredients.filter((i) => i.unlockLevel <= G.state.level || (inv[i.id] || 0) > 0);
+    const ings = PS.data.ingredients.filter(
+      (i) => (i.unlockLevel <= G.state.level && i.prestige <= G.prestige()) || (inv[i.id] || 0) > 0
+    );
     const cols = ings.length > 8 ? 5 : 4;
     const cw = area.w / cols;
     const ch = 100;
@@ -415,9 +448,9 @@ PS.UI = {
     // Recipe book (rows with waiting orders first)
     this.text(G, 'Recipe book — tap to fill', area.x, y, area.w, 24, COLORS.ink, 'left', P.items, 'UI', 16);
     y += 30;
-    const pend = PS.World.pendingOrders(G).concat(G.customers.filter((cc) => cc.state === 'waitingOrder'));
+    const wanted = PS.World.wantedItems(G);
     const recipes = PS.Brewing.knownRecipes(G)
-      .map((r) => ({ r, n: pend.filter((cc) => cc.recipe.id === r.id).length }))
+      .map((r) => ({ r, n: wanted.filter((w) => w.recipe.id === r.id).length }))
       .sort((a, b) => b.n - a.n);
     const rh = 60;
     const room = Math.max(1, Math.floor((area.y + area.h - y) / rh));
@@ -449,7 +482,7 @@ PS.UI = {
     });
   },
 
-  // ----- Orders panel
+  // ----- Orders panel: one row per customer, one icon per potion ordered.
   buildOrders(G, P) {
     const area = this.frame(G, P, 'Orders', 900);
     const list = G.customers
@@ -461,31 +494,38 @@ PS.UI = {
       return;
     }
     const rows = list.map((c) => (x, y, w, h) => {
-      const r = c.recipe;
       this.panelBox(G, 'PanelParchment', x, y, w, h, P.items, 16);
-      this.icon(G, r.icon, x + 46, y + h / 2, 72, P.items, 'UI', 17);
-      this.text(G, r.name, x + 90, y + 10, 260, 28, COLORS.ink, 'left', P.items, 'UI', 17);
-      r.ingredients.forEach((id, j) => {
-        this.icon(G, PS.data.ingredientById[id].icon, x + 108 + j * 44, y + 62, 38, P.items, 'UI', 17);
+      // Potions of the order (checked when delivered)
+      c.items.forEach((it, j) => {
+        const ix = x + 40 + j * 58;
+        const ic = this.icon(G, it.recipe.icon, ix, y + 40, 52, P.items, 'UI', 17);
+        if (it.done) {
+          ic.setOpacity(110);
+          this.icon(G, 'icon_check', ix + 16, y + 56, 24, P.items, 'UI', 18);
+        }
       });
+      const left = c.items.filter((i) => !i.done);
+      const first = left[0] ? left[0].recipe : c.items[0].recipe;
+      const title = c.items.length > 1 ? c.items.length + ' potions' : first.name;
+      this.text(G, title, x + 40 + Math.min(c.items.length, 5) * 58, y + 22, 220, 26, COLORS.ink, 'left', P.items, 'UI', 17);
       const ratio = c.patience / c.maxPatience;
-      this.icon(G, this.moodIcon(ratio), x + 214, y + 62, 30, P.items, 'UI', 17);
-      this.bar(G, P.items, x + 234, y + 53, 120, 18, ratio, this.patienceColor(ratio), 'UI', 17);
+      this.icon(G, this.moodIcon(ratio), x + 26, y + 88, 30, P.items, 'UI', 17);
+      this.bar(G, P.items, x + 46, y + 79, 120, 18, ratio, this.patienceColor(ratio), 'UI', 17);
       let status = 'Tap customer to take order';
       let col = COLORS.muted;
       if (c.state === 'ordered') {
-        const brewing = G.cauldrons.find((k) => k.recipe && k.recipe.id === r.id && k.state === 'brewing');
-        const ready = G.cauldrons.find((k) => k.recipe && k.recipe.id === r.id && k.state === 'done');
-        if (c.deliveryReserved) (status = 'On the way!'), (col = COLORS.green);
-        else if (ready) (status = 'Ready in cauldron'), (col = COLORS.green);
-        else if ((G.state.stock[r.id] || 0) > 0) (status = 'On the counter'), (col = COLORS.green);
-        else if (brewing) (status = 'Brewing...'), (col = '120;80;200');
-        else (status = 'Waiting for potion'), (col = COLORS.red);
+        const done = c.items.length - left.length;
+        const coming = left.filter((i) => i.reserved).length;
+        if (c.items.length > 1) status = done + '/' + c.items.length + ' delivered';
+        else status = coming ? 'On the way!' : 'Waiting for potion';
+        if (coming) status += c.items.length > 1 ? ' · ' + coming + ' on the way' : '';
+        col = coming ? COLORS.green : COLORS.red;
       }
-      this.text(G, status, x + 90, y + 84, 300, 20, col, 'left', P.items, 'UI', 17);
-      const pay = Math.round(r.price * G.mult('fine_bottles', +1) * c.type.tip * (1 + PS.data.balance.tipMax * ratio));
+      this.text(G, status, x + 176, y + 78, 260, 20, col, 'left', P.items, 'UI', 17);
+      const tip = c.type.tip * (1 + PS.data.balance.tipMax * ratio);
+      const pay = Math.round(c.items.reduce((a, it) => a + G.potionPrice(it.recipe), 0) * tip);
       this.icon(G, 'icon_coin', x + w - 196, y + 26, 30, P.items, 'UI', 17);
-      this.text(G, U.formatGold(pay) + 'g', x + w - 178, y + 12, 70, 26, '170;120;20', 'left', P.items, 'UI', 17);
+      this.text(G, U.formatGold(pay) + 'g', x + w - 178, y + 12, 90, 26, '170;120;20', 'left', P.items, 'UI', 17);
       if (c.state === 'waitingOrder') {
         this.button(G, P, x + w - 150, y + h - 62, 140, 54, 'BtnBlue', 'Take', {
           size: 26,
@@ -495,8 +535,14 @@ PS.UI = {
           },
         });
       } else {
+        // Brew the first potion of this order that nobody is making yet.
+        const want = PS.World.uncoveredItem(G, null);
+        const mine = left.find((i) => !i.reserved && PS.Brewing.plannedFor(G, i.recipe.id) <
+          PS.World.wantedItems(G).filter((x) => x.recipe.id === i.recipe.id).length);
+        const r = mine ? mine.recipe : null;
         const idle = PS.Brewing.idleCauldron(G);
-        const can = PS.Brewing.canBrew(G, r);
+        const can = r && PS.Brewing.canBrew(G, r);
+        void want;
         this.button(G, P, x + w - 150, y + h - 62, 140, 54, 'BtnGreen', 'Brew', {
           tag: 'brew:' + c.id,
           size: 26,
@@ -504,7 +550,7 @@ PS.UI = {
           onTap: () => {
             if (PS.Brewing.request(G, idle, PS.Brewing.bestIngredients(G, r))) this.rebuild(G);
           },
-          onDisabled: () => this.toast(G, !idle ? 'All cauldrons are busy' : 'Missing ingredients'),
+          onDisabled: () => this.toast(G, !r ? 'Their potions are already being made' : !idle ? 'All cauldrons are busy' : 'Missing ingredients'),
         });
       }
     });
@@ -528,16 +574,19 @@ PS.UI = {
       });
     area.y += 70;
     area.h -= 70;
-    const rows = PS.data.ingredients.map((ing) => (x, y, w, h) => {
-      const locked = ing.unlockLevel > G.state.level;
+    const shown = PS.data.ingredients.filter((i) => i.prestige <= G.prestige() + 1);
+    const rows = shown.map((ing) => (x, y, w, h) => {
+      const locked = ing.unlockLevel > G.state.level || ing.prestige > G.prestige();
       const n0 = inv[ing.id] || 0;
       this.panelBox(G, locked ? 'BtnGray' : 'PanelParchment', x, y, w, h, P.items, 16);
       this.icon(G, ing.icon, x + 46, y + h / 2, 70, P.items, 'UI', 17);
       this.text(G, ing.name, x + 92, y + 12, 240, 28, COLORS.ink, 'left', P.items, 'UI', 17);
       if (locked) {
         this.icon(G, 'icon_lock', x + w - 60, y + h / 2, 44, P.items, 'UI', 17);
-        this.text(G, ing.rare ? 'Rare: found in the Garden. Sold from shop level ' + ing.unlockLevel
-          : 'Unlocks at shop level ' + ing.unlockLevel, x + 92, y + 46, w - 170, 20, COLORS.muted, 'left', P.items, 'UI', 17);
+        const why = ing.prestige > G.prestige() ? 'Unlocks at prestige ' + ing.prestige
+          : ing.rare ? 'Rare: from the Garden and happy customers. Sold from shop level ' + ing.unlockLevel
+            : 'Unlocks at shop level ' + ing.unlockLevel;
+        this.text(G, why, x + 92, y + 46, w - 170, 20, COLORS.muted, 'left', P.items, 'UI', 17);
         if (ing.rare && n0 > 0) {
           this.text(G, 'In stock: ' + n0, x + 92, y + 72, 200, 20, COLORS.green, 'left', P.items, 'UI', 17);
         }
@@ -549,7 +598,7 @@ PS.UI = {
       this.text(G, 'In stock: ' + n + ' / ' + cap + (n <= 2 ? '  LOW!' : ''), x + 92, y + 50, 260, 24,
         n <= 2 ? COLORS.red : COLORS.green,
         'left', P.items, 'UI', 17);
-      const cost = ing.cost * ing.bundle;
+      const cost = G.herbCost(ing);
       this.button(G, P, x + w - 200, y + 14, 190, h - 28, 'BtnGold', '+' + ing.bundle + '  ' + U.formatGold(cost) + 'g', {
         tag: 'buy:' + ing.id,
         size: 26,
@@ -567,10 +616,30 @@ PS.UI = {
     this.list(G, P, area, 108, rows);
   },
 
-  // ----- Upgrades and expansion (same data table, different tab)
+  // ----- Upgrades (shop upgrades or potion masteries) and expansion
   buildUpgrades(G, P, tab) {
-    const area = this.frame(G, P, tab === 'expand' ? 'Expand the shop' : 'Upgrades', 900);
-    const ups = PS.data.upgrades.filter((u) => u.tab === tab);
+    const title = tab === 'expand' ? 'Expand the shop' : 'Upgrades';
+    const area = this.frame(G, P, title, 980);
+    let kind = tab;
+    if (tab === 'upgrades') {
+      // Sub tabs: shop upgrades reset on prestige, masteries are kept.
+      kind = P.params.sub || 'upgrades';
+      const half = (area.w - 12) / 2;
+      [['upgrades', 'Shop upgrades'], ['mastery', 'Potion Mastery']].forEach(([id, label], i) => {
+        this.button(G, P, area.x + i * (half + 12), area.y - 8, half, 56, kind === id ? 'BtnGold' : 'BtnGray', label, {
+          tag: 'sub:' + id,
+          size: 24,
+          onTap: () => {
+            P.params.sub = id;
+            G.ui.scroll = 0;
+            this.rebuild(G);
+          },
+        });
+      });
+      area.y += 60;
+      area.h -= 60;
+    }
+    const ups = PS.data.upgrades.filter((u) => u.tab === kind && (u.prestige || 0) <= G.prestige());
     const rows = ups.map((u) => (x, y, w, h) => {
       const lvl = G.state.upgrades[u.id] || 0;
       const maxed = lvl >= G.upgradeMax(u);
@@ -580,7 +649,7 @@ PS.UI = {
       this.icon(G, u.icon, x + 44, y + h / 2, 64, P.items, 'UI', 17);
       this.text(G, u.name, x + 88, y + 10, 300, 28, COLORS.ink, 'left', P.items, 'UI', 17);
       this.text(G, u.desc, x + 88, y + 44, w - 300, 20, COLORS.muted, 'left', P.items, 'UI', 17);
-      this.text(G, G.upgradeStatus(u), x + 88, y + h - 32, 300, 22, '60;110;160', 'left', P.items, 'UI', 17);
+      this.text(G, G.upgradeStatus(u), x + 88, y + h - 32, 330, 22, '60;110;160', 'left', P.items, 'UI', 17);
       if (locked) {
         this.icon(G, 'icon_lock', x + w - 120, y + h / 2 - 10, 40, P.items, 'UI', 17);
         this.text(G, 'Shop Lv ' + u.minShopLevel, x + w - 200, y + h / 2 + 14, 170, 22, COLORS.muted, 'center', P.items,
@@ -602,7 +671,141 @@ PS.UI = {
         });
       }
     });
+    if (tab === 'expand') {
+      // Prestige: start a bigger, harder shop once everything is maxed.
+      rows.push((x, y, w, h) => {
+        const pr = G.prestigeProgress();
+        this.panelBox(G, pr.ready ? 'BtnPurple' : 'PanelDark', x, y, w, h, P.items, 16);
+        this.icon(G, 'icon_crown', x + 44, y + h / 2, 64, P.items, 'UI', 17);
+        this.text(G, 'Prestige ' + (G.prestige() + 1), x + 88, y + 10, 300, 28, COLORS.gold, 'left', P.items, 'UI', 17, '40;24;16');
+        this.text(G, pr.ready ? 'Everything is maxed. Start a bigger shop!' : 'Max every upgrade and hire all apprentices: ' +
+          pr.done + '/' + pr.total, x + 88, y + 46, w - 300, 22, '255;255;255', 'left', P.items, 'UI', 17);
+        this.button(G, P, x + w - 200, y + h / 2 - 34, 190, 68, 'BtnGold', 'Details', {
+          tag: 'prestige',
+          size: 28,
+          onTap: () => this.open(G, 'prestige'),
+        });
+      });
+    }
     this.list(G, P, area, 132, rows);
+  },
+
+  // ----- Prestige: what changes, what is kept, and the confirm button.
+  buildPrestige(G, P) {
+    const area = this.frame(G, P, 'Prestige ' + (G.prestige() + 1), 1000);
+    const next = G.prestige() + 1;
+    const pr = G.prestigeProgress();
+    const newRecipes = PS.data.recipes.filter((r) => r.prestige === next);
+    const lines = [
+      ['icon_tables', 'Tables seat ' + Math.min(5, 1 + next) + ' customers each'],
+      ['icon_orders', 'Customers can order up to ' + Math.min(5, 1 + next) + ' potions'],
+      ['icon_coin', 'Potions sell for ' + Math.pow(PS.data.balance.prestigePriceMult, next) + 'x the base price'],
+      ['icon_upgrades', 'Upgrades cost ' + Math.pow(PS.data.balance.prestigeCostMult, next) + 'x more'],
+      ['icon_patience', 'Customers are a little less patient'],
+      ['icon_quality', '+' + PS.data.balance.prestigeGems * next + ' gems'],
+    ];
+    let y = area.y;
+    if (newRecipes.length) {
+      this.text(G, 'New potions:', area.x, y, 200, 26, COLORS.ink, 'left', P.items, 'UI', 17);
+      newRecipes.forEach((r, i) => this.icon(G, r.icon, area.x + 190 + i * 60, y + 14, 50, P.items, 'UI', 17));
+      y += 50;
+    }
+    lines.forEach(([ic, t]) => {
+      this.icon(G, ic, area.x + 22, y + 16, 34, P.items, 'UI', 17);
+      this.text(G, t, area.x + 50, y + 2, area.w - 50, 24, COLORS.ink, 'left', P.items, 'UI', 17);
+      y += 42;
+    });
+    y += 6;
+    this.text(G, 'Kept: shop level, gems, Potion Mastery, discovered recipes, stats.\n' +
+      'Reset: gold, herbs, shop upgrades, tables, cauldrons, apprentices, garden.', area.x, y, area.w, 22, COLORS.muted,
+      'left', P.items, 'UI', 17);
+    y += 70;
+    if (!pr.ready) {
+      this.text(G, 'Still to do (' + pr.done + '/' + pr.total + '):', area.x, y, area.w, 24, COLORS.red, 'left', P.items, 'UI', 17);
+      y += 32;
+      pr.missing.slice(0, 6).forEach((m) => {
+        this.text(G, '· ' + m, area.x + 10, y, area.w - 10, 22, COLORS.ink, 'left', P.items, 'UI', 17);
+        y += 28;
+      });
+      return;
+    }
+    const confirm = P.params.confirm;
+    this.button(G, P, area.x + area.w / 2 - 200, y + 10, 400, 84, confirm ? 'BtnRed' : 'BtnPurple',
+      confirm ? 'Tap again to prestige' : 'Prestige now', {
+        tag: 'doPrestige',
+        icon: 'icon_crown',
+        size: 32,
+        onTap: () => {
+          if (!confirm) {
+            P.params.confirm = true;
+            this.rebuild(G);
+          } else G.doPrestige();
+        },
+      });
+  },
+
+  // ----- The shop closed: reopen with gold or gems.
+  buildClosed(G, P) {
+    const area = this.frame(G, P, 'Shop closed!', 620);
+    this.icon(G, 'icon_closed', area.x + 56, area.y + 60, 96, P.items, 'UI', 17);
+    this.text(G, 'Too many unhappy customers: nobody wants to visit right now. Reopen the shop to get customers back ' +
+      '(satisfaction restarts at 55%).', area.x + 120, area.y, area.w - 120, 24, COLORS.ink, 'left', P.items, 'UI', 17);
+    const gold = PS.World.reopenCost(G);
+    const gems = PS.data.balance.reopenGems;
+    this.button(G, P, area.x, area.y + 170, area.w, 80, 'BtnGold', 'Reopen for ' + U.formatGold(gold) + 'g', {
+      tag: 'reopenGold',
+      icon: 'icon_coin',
+      size: 30,
+      disabled: G.state.gold < gold,
+      onTap: () => PS.World.reopen(G, false) && this.close(G),
+      onDisabled: () => this.toast(G, 'Not enough gold'),
+    });
+    this.button(G, P, area.x, area.y + 266, area.w, 80, 'BtnBlue', 'Reopen for ' + gems + ' gems', {
+      tag: 'reopenGems',
+      icon: 'icon_quality',
+      size: 30,
+      disabled: G.state.gems < gems,
+      onTap: () => PS.World.reopen(G, true) && this.close(G),
+      onDisabled: () => this.toast(G, 'Not enough gems'),
+    });
+    this.button(G, P, area.x, area.y + 362, area.w, 80, 'BtnPurple', 'Watch an ad to reopen (' + PS.Ads.left(G) + ' left today)', {
+      tag: 'reopenAd',
+      icon: 'icon_ad',
+      size: 24,
+      disabled: PS.Ads.left(G) <= 0,
+      onTap: () => PS.Ads.watch(G, 'Reopen the shop', () => {
+        G.state.closed = false;
+        G.state.satisfaction = 55;
+        G.saveNow();
+      }),
+      onDisabled: () => this.toast(G, 'No more ads today'),
+    });
+  },
+
+  // ----- Rewarded ad placeholder (real ads come with the mobile app build).
+  buildAd(G, P) {
+    const area = this.frame(G, P, 'Watch an ad', 700);
+    const left = Math.max(0, (P.params.until - Date.now()) / 1000);
+    this.panelBox(G, 'PanelDark', area.x, area.y, area.w, 300, P.items, 16);
+    this.text(G, 'Advertisement', area.x, area.y + 40, area.w, 36, '255;255;255', 'center', P.items, 'UI', 17);
+    this.text(G, 'In the app version a short video ad plays here.\nThis web build shows a placeholder.', area.x + 20,
+      area.y + 110, area.w - 40, 24, '220;220;230', 'center', P.items, 'UI', 17);
+    this.text(G, left > 0 ? Math.ceil(left) + '' : '', area.x, area.y + 200, area.w, 48, COLORS.gold, 'center', P.items, 'UI', 17);
+    this.text(G, 'Reward: ' + P.params.reason, area.x, area.y + 320, area.w, 26, COLORS.ink, 'center', P.items, 'UI', 17);
+    this.button(G, P, area.x + area.w / 2 - 170, area.y + 370, 340, 80, left > 0 ? 'BtnGray' : 'BtnGreen', 'Claim reward', {
+      tag: 'claimAd',
+      icon: 'icon_check',
+      size: 30,
+      disabled: left > 0,
+      onTap: () => {
+        PS.Ads.claim(G);
+        const fn = P.params.onReward;
+        this.close(G);
+        fn();
+        PS.Audio.play(G.shop || G, 'coin');
+      },
+      onDisabled: () => this.toast(G, 'Almost done...'),
+    });
   },
 
   buildWorkers(G, P) {
@@ -681,12 +884,12 @@ PS.UI = {
         : 'Takes orders, brews and delivers on their own.', x + 90, y + 52, w - 330, 22,
         locked ? '235;235;235' : COLORS.muted, 'left', P.items, 'UI', 17);
       if (!locked) {
-        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', U.formatGold(next.hireCost) + 'g', {
+        this.button(G, P, x + w - 220, y + h / 2 - 36, 210, 72, 'BtnGreen', U.formatGold(G.hireCost(next)) + 'g', {
           tag: 'hire',
           icon: 'icon_coin',
           iconSize: 36,
           size: 30,
-          disabled: G.state.gold < next.hireCost,
+          disabled: G.state.gold < G.hireCost(next),
           onTap: () => {
             G.hireWorker();
             this.rebuild(G);
@@ -847,20 +1050,44 @@ PS.UI = {
     if (!p) return;
     const [sx, sy] = p;
     const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
+    // Neighbours at a long table: smaller bubbles, staggered in height.
+    const crowded = c.seat && c.seat.slot.seats.length > 1;
+    const k = crowded ? 0.78 : 1;
+    const stagger = crowded ? (c.seat.slot.seats.indexOf(c.seat) % 2) * 36 : 0;
+    const n = c.items.length;
+    const isz = (n > 1 ? 36 : 44) * k;
     const bubble = this.ensure(G, c.ui, 'bubble', 'SpeechBubble', 1);
     bubble.hide(!seated);
-    const bw = 62;
-    const bh = 67;
+    // Big orders overlap their icons so bubbles stay narrow at long tables.
+    const step = n >= 3 ? isz * 0.62 : isz + 2;
+    const bw = Math.max(62 * k, (n - 1) * step + isz + 18 * k);
+    const bh = 67 * k;
     bubble.setWidth(bw);
     bubble.setHeight(bh);
-    const bob = c.state === 'waitingOrder' ? Math.sin(G.time * 5 + c.id) * 3 : 0;
+    const bob = (c.state === 'waitingOrder' ? Math.sin(G.time * 5 + c.id) * 3 : 0) - stagger;
     bubble.setPosition(sx - bw / 2, sy - bh - 10 + bob);
-    const icon = this.ensure(G, c.ui, 'icon', 'Icon', 2);
-    icon.hide(!seated);
-    icon.setAnimationName(c.recipe.icon);
-    icon.setWidth(44);
-    icon.setHeight(44);
-    icon.setPosition(sx - 22, sy - bh - 4 + bob);
+    // One icon per potion ordered; delivered ones fade with a check mark.
+    for (let i = 0; i < 5; i++) {
+      const icon = this.ensure(G, c.ui, 'icon' + i, 'Icon', 2);
+      const chk = this.ensure(G, c.ui, 'chk' + i, 'Icon', 3);
+      const it = c.items[i];
+      icon.hide(!seated || !it);
+      chk.hide(!seated || !it || !it.done);
+      if (!it || !seated) continue;
+      icon.setAnimationName(it.recipe.icon);
+      icon.setWidth(isz);
+      icon.setHeight(isz);
+      const ix = sx - ((n - 1) * step + isz) / 2 + i * step;
+      icon.setPosition(ix, sy - bh - 4 * k + bob + (44 * k - isz) / 2);
+      icon.setOpacity(it.done ? 100 : 255);
+      if (it.done) {
+        chk.setAnimationName('icon_check');
+        chk.setWidth(isz * 0.55);
+        chk.setHeight(isz * 0.55);
+        chk.setPosition(ix + isz * 0.45, sy - bh + bob + isz * 0.4);
+      }
+    }
+    const right = sx + bw / 2 - 15;
     // Badge: "needs order taking" or the owner's plan number.
     const badge = this.ensure(G, c.ui, 'badge', 'Icon', 3);
     const plan = PS.Workers.planIndex(G, c);
@@ -872,14 +1099,14 @@ PS.UI = {
       num.hide(false);
       numBack.setWidth(30);
       numBack.setHeight(30);
-      numBack.setPosition(sx + 16, sy - bh - 22 + bob);
+      numBack.setPosition(right - 8, sy - bh - 22 + bob);
       num.setText(String(plan));
       num.setCharacterSize(20);
       num.setColor('255;255;255');
       num.setTextAlignment('center');
       num.setWrapping(true);
       num.setWrappingWidth(30);
-      num.setPosition(sx + 16, sy - bh - 19 + bob);
+      num.setPosition(right - 8, sy - bh - 19 + bob);
     } else {
       numBack.hide(true);
       num.hide(true);
@@ -891,27 +1118,27 @@ PS.UI = {
       const s = c.state === 'waitingOrder' ? 30 + 4 * Math.sin(G.time * 8) : 24;
       badge.setWidth(s);
       badge.setHeight(s);
-      badge.setPosition(sx + 22 - s / 2, sy - bh - 10 - s / 2 + bob);
+      badge.setPosition(right + 7 - s / 2, sy - bh - 10 - s / 2 + bob);
     }
     // Patience bar + mood
     const back = this.ensure(G, c.ui, 'barBack', 'BarBack', 1);
     const fill = this.ensure(G, c.ui, 'barFill', 'BarFill', 2);
     const mood = this.ensure(G, c.ui, 'mood', 'Icon', 3);
-    const barW = 54;
+    const barW = 54 * k;
     back.hide(false);
     fill.hide(false);
     mood.hide(false);
     back.setWidth(barW);
     back.setHeight(12);
-    back.setPosition(sx - barW / 2 + 8, sy - 8);
+    back.setPosition(sx - barW / 2 + 8, sy - 8 - stagger);
     fill.setWidth(Math.max(6, (barW - 4) * ratio));
     fill.setHeight(8);
-    fill.setPosition(sx - barW / 2 + 10, sy - 6);
+    fill.setPosition(sx - barW / 2 + 10, sy - 6 - stagger);
     fill.setColor(this.patienceColor(ratio));
     mood.setAnimationName(this.moodIcon(ratio));
     mood.setWidth(24);
     mood.setHeight(24);
-    mood.setPosition(sx - barW / 2 - 18, sy - 14);
+    mood.setPosition(sx - barW / 2 - 18, sy - 14 - stagger);
     if (ratio < 0.2) {
       const blink = Math.sin(G.time * 12) > 0;
       mood.setOpacity(blink ? 255 : 120);
@@ -1183,7 +1410,8 @@ PS.UI = {
       this.close(G);
       return;
     }
-    PS.Input.worldTap(G, x, y);
+    if (G.worldTap) G.worldTap(x, y);
+    else PS.Input.worldTap(G, x, y);
   },
 
   // Floating texts and the toast message (also used by the garden scene).
@@ -1219,12 +1447,12 @@ PS.UI = {
     for (const c of G.cauldrons) if (c.unlocked) this.updateCauldronOverlay(G, c);
     for (const w of G.workers) this.updateWorkerOverlay(G, w);
     this.updateCounterOverlay(G);
-    for (const st of G.seats) this.updateSlotOverlay(G, st, 'extra_table');
+    for (const st of G.slots) this.updateSlotOverlay(G, st, 'extra_table');
     for (const c of G.cauldrons) this.updateSlotOverlay(G, c, 'extra_cauldron');
     this.updateTransient(G, dt);
     // Live panels refresh a few times per second (timers, patience bars).
     G.ui.refreshTimer -= dt;
-    const live = G.ui.panel && (G.ui.panel.name === 'orders' || G.ui.panel.name === 'workers' || G.ui.dirty);
+    const live = G.ui.panel && (['orders', 'workers', 'ad'].includes(G.ui.panel.name) || G.ui.dirty);
     if (live && G.ui.refreshTimer <= 0 && !G.ui.dragging) {
       G.ui.refreshTimer = 0.5;
       G.ui.dirty = false;
@@ -1260,7 +1488,7 @@ PS.Input = {
         if (c.spill) consider(c.x, c.y + 50, 2, 'cauldron', c, 10);
       } else if (c.sign) consider(c.x, c.y, 30, 'slot', 'cauldron');
     }
-    for (const s of G.seats) if (s.sign) consider(s.obj.getX(), s.obj.getY(), 30, 'slot', 'table');
+    for (const s of G.slots) if (s.sign) consider(s.x, s.y, 30, 'slot', 'table');
     consider(G.counter.x, G.counter.y, 50, 'counter', null, -10);
     if (!best) return;
     if (best.kind === 'customer') this.tapCustomer(G, best.target);
@@ -1276,18 +1504,24 @@ PS.Input = {
     if (c.state === 'waitingOrder') {
       PS.Workers.enqueue(G, { type: 'takeOrder', target: c });
     } else if (c.state === 'ordered') {
-      if (c.deliveryReserved) return PS.UI.toast(G, 'Their potion is on the way!');
-      if ((G.state.stock[c.recipe.id] || 0) > 0) {
-        PS.Workers.enqueue(G, { type: 'fetchStock', target: c });
+      const needed = PS.Order.needsAny(c);
+      if (!needed.length) return PS.UI.toast(G, 'Their potions are on the way!');
+      // A wanted potion waiting on the counter: bring it.
+      const stocked = needed.find((i) => (G.state.stock[i.recipe.id] || 0) > 0);
+      if (stocked) {
+        PS.Workers.enqueue(G, { type: 'fetchStock', target: c, recipe: stocked.recipe });
         return;
       }
-      const ready = G.cauldrons.find((k) => k.state === 'done' && k.recipe.id === c.recipe.id);
-      if (ready) return this.tapCauldron(G, ready);
-      const brewing = G.cauldrons.find((k) => (k.state === 'brewing' || k.state === 'reserved') && k.recipe.id === c.recipe.id);
-      if (brewing) return PS.UI.toast(G, c.recipe.name + ' is brewing...');
+      for (const it of needed) {
+        const ready = G.cauldrons.find((k) => k.state === 'done' && k.recipe.id === it.recipe.id);
+        if (ready) return this.tapCauldron(G, ready);
+      }
+      const unplanned = needed.find((i) => PS.Brewing.plannedFor(G, i.recipe.id) <
+        PS.World.wantedItems(G).filter((x) => x.recipe.id === i.recipe.id).length);
+      if (!unplanned) return PS.UI.toast(G, 'Their potions are brewing...');
       const idle = PS.Brewing.idleCauldron(G);
-      if (idle) PS.UI.open(G, 'brew', { cauldron: idle, slots: PS.Brewing.bestIngredients(G, c.recipe) });
-      else PS.UI.toast(G, 'Wants a ' + c.recipe.name + ' — all cauldrons are busy');
+      if (idle) PS.UI.open(G, 'brew', { cauldron: idle, slots: PS.Brewing.bestIngredients(G, unplanned.recipe) });
+      else PS.UI.toast(G, 'Wants ' + unplanned.recipe.name + ' — all cauldrons are busy');
     } else {
       PS.UI.toast(G, 'Waiting for a free table');
     }
@@ -1295,9 +1529,8 @@ PS.Input = {
 
   tapCauldron(G, c) {
     if (c.state === 'idle') {
-      // Pre-fill with the oldest order that is not covered yet.
-      const orders = PS.World.pendingOrders(G);
-      const want = orders.find((o) => PS.Brewing.plannedFor(G, o.recipe.id) < orders.filter((x) => x.recipe.id === o.recipe.id).length);
+      // Pre-fill with the oldest wanted potion nobody is making yet.
+      const want = PS.World.uncoveredItem(G, null);
       PS.UI.open(G, 'brew', { cauldron: c, slots: want ? PS.Brewing.bestIngredients(G, want.recipe) : [] });
     } else if (c.state === 'done') {
       PS.Workers.enqueue(G, { type: 'collect', target: c });

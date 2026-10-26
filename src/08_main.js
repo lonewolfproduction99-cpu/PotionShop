@@ -34,6 +34,35 @@ PS.Audio = {
   },
 };
 
+// Rewarded ads with a daily limit. This web build shows a short placeholder;
+// the mobile app build will plug the real ad provider in here (show the ad,
+// then call the reward on success).
+PS.Ads = {
+  today() {
+    return new Date().toISOString().slice(0, 10);
+  },
+  state(G) {
+    const s = (G.shop || G).state;
+    if (s.ads.day !== this.today()) s.ads = { day: this.today(), count: 0 };
+    return s.ads;
+  },
+  left(G) {
+    return Math.max(0, PS.data.balance.adDailyLimit - this.state(G).count);
+  },
+  watch(G, reason, onReward) {
+    if (this.left(G) <= 0) {
+      PS.UI.toast(G, 'No more ads today, come back tomorrow');
+      return false;
+    }
+    PS.UI.open(G, 'ad', { reason, onReward, until: Date.now() + 3000 }); // real seconds, like a video
+    return true;
+  },
+  claim(G) {
+    this.state(G).count += 1;
+    (G.shop || G).requestSave();
+  },
+};
+
 PS.Game = class {
   constructor(runtimeScene) {
     this.scene = runtimeScene;
@@ -48,9 +77,10 @@ PS.Game = class {
     PS.proj.init(runtimeScene);
     this.settings = this.loadSettings();
     this.state = PS.Save.load();
-    this.nav = new PS.Nav(runtimeScene);
     PS.setupCamera(runtimeScene);
     PS.World.init(this);
+    // Navigation is built after the tables exist (long tables are created at runtime).
+    this.nav = new PS.Nav(runtimeScene);
     PS.Workers.createOwner(this);
     this.state.workers.forEach((record, i) => PS.Workers.createApprentice(this, i + 1, record));
     PS.UI.init(this);
@@ -79,17 +109,77 @@ PS.Game = class {
     const u = PS.data.upgradeById.herb_storage;
     return PS.data.balance.storageBase + (u ? u.effect * this.level('herb_storage') : 0);
   }
+  // ----- prestige
+  prestige() {
+    return this.state.prestige || 0;
+  }
+  groupSize() {
+    return Math.min(5, 1 + this.prestige()); // chairs per table slot
+  }
+  maxOrderItems() {
+    return Math.min(5, 1 + this.prestige()); // potions one customer may order
+  }
+  patienceMult() {
+    return Math.max(0.6, Math.pow(0.93, this.prestige()));
+  }
+  costMult() {
+    return Math.pow(PS.data.balance.prestigeCostMult, this.prestige());
+  }
+  herbCostMult() {
+    return Math.pow(PS.data.balance.prestigeHerbMult, this.prestige());
+  }
+  // Selling price of one Standard potion: prestige bonus, Fine Bottles and mastery.
+  potionPrice(recipe) {
+    const mastery = PS.data.upgradeById['mastery_' + recipe.id];
+    const m = mastery ? 1 + mastery.effect * this.level(mastery.id) : 1;
+    return recipe.price * Math.pow(PS.data.balance.prestigePriceMult, this.prestige()) * this.mult('fine_bottles', +1) * m;
+  }
+  herbCost(ing) {
+    return Math.round(ing.cost * ing.bundle * this.herbCostMult());
+  }
+  hireCost(t) {
+    return Math.round(t.hireCost * this.costMult());
+  }
+  // Prestige needs every shop upgrade maxed and every apprentice hired.
+  prestigeProgress() {
+    const goals = PS.data.upgrades.filter((u) => !u.persistent && (u.tab === 'upgrades' || u.tab === 'expand'));
+    let done = 0;
+    const missing = [];
+    for (const u of goals) {
+      if (this.level(u.id) >= this.upgradeMax(u)) done++;
+      else missing.push(u.name);
+    }
+    const hired = this.state.workers.length;
+    const needHires = PS.data.workerTypes.length;
+    if (hired < needHires) missing.push('Hire all apprentices (' + hired + '/' + needHires + ')');
+    return { done: done + Math.min(hired, needHires), total: goals.length + needHires, ready: missing.length === 0, missing };
+  }
+  doPrestige() {
+    if (!this.prestigeProgress().ready) return false;
+    const next = PS.Save.prestigeReset(this.state);
+    next.gems += PS.data.balance.prestigeGems * next.prestige;
+    this.state = next;
+    PS.Save.save(next);
+    this.prestiging = true;
+    this.scene.requestChange(gdjs.SceneChangeRequest.REPLACE_SCENE, 'Shop');
+    return true;
+  }
+
   upgradeMax(u) {
-    if (u.id === 'extra_table') return Math.min(u.maxLevel, this.seats.length - 3);
+    if (u.id === 'extra_table') return Math.min(u.maxLevel, this.slots.length - 3);
     if (u.id === 'extra_cauldron') return Math.min(u.maxLevel, this.cauldrons.length - 1);
     return u.maxLevel;
   }
   upgradeCost(u) {
-    return Math.round(u.baseCost * Math.pow(u.costGrowth, this.level(u.id)));
+    // Shop upgrades get more expensive with every prestige; masteries keep their own curve.
+    return Math.round(u.baseCost * Math.pow(u.costGrowth, this.level(u.id)) * (u.persistent ? 1 : this.costMult()));
   }
   upgradeStatus(u) {
     const l = this.level(u.id);
-    if (u.id === 'extra_table') return 'Tables: ' + PS.World.tablesUnlocked(this) + ' / ' + this.seats.length;
+    if (u.id === 'extra_table') {
+      const n = this.groupSize();
+      return 'Tables: ' + PS.World.tablesUnlocked(this) + ' / ' + this.slots.length + (n > 1 ? '  (' + n + ' seats each)' : '');
+    }
     if (u.id === 'extra_cauldron') return 'Cauldrons: ' + PS.World.cauldronsUnlocked(this) + ' / ' + this.cauldrons.length;
     return 'Level ' + l + ' / ' + u.maxLevel + (l ? '  ·  +' + Math.round(u.effect * l * 100) + '%' : '');
   }
@@ -111,8 +201,8 @@ PS.Game = class {
   }
   hireWorker() {
     const t = this.nextWorkerType();
-    if (!t || this.state.gold < t.hireCost || this.state.level < t.minShopLevel) return false;
-    this.addGold(-t.hireCost);
+    if (!t || this.state.gold < this.hireCost(t) || this.state.level < t.minShopLevel) return false;
+    this.addGold(-this.hireCost(t));
     const record = { type: t.id, role: 'all', stats: { speed: 0, brew: 0, service: 0 } };
     this.state.workers.push(record);
     const w = PS.Workers.createApprentice(this, this.state.workers.length, record);
@@ -127,7 +217,7 @@ PS.Game = class {
   workerUpgradeCost(index, stat) {
     const b = PS.data.balance;
     const lvl = this.state.workers[index - 1].stats[stat] || 0;
-    return Math.round(b.workerUpgradeBase * Math.pow(b.workerUpgradeGrowth, lvl) * (1 + 0.6 * (index - 1)));
+    return Math.round(b.workerUpgradeBase * Math.pow(b.workerUpgradeGrowth, lvl) * (1 + 0.6 * (index - 1)) * this.costMult());
   }
   upgradeWorker(index, stat) {
     const rec = this.state.workers[index - 1];
@@ -157,13 +247,16 @@ PS.Game = class {
     s.xp += n;
     let leveled = false;
     const newRecipes = [];
-    while (s.xp >= PS.xpForLevel(s.level) && s.level < 99) {
+    while (s.xp >= PS.xpForLevel(s.level) && s.level < 999) {
       s.xp -= PS.xpForLevel(s.level);
       s.level += 1;
       leveled = true;
-      for (const r of PS.data.recipes) if (r.unlockLevel === s.level) newRecipes.push(r);
+      s.gems += PS.data.balance.levelGems;
+      for (const r of PS.data.recipes) if (r.unlockLevel === s.level && r.prestige <= s.prestige) newRecipes.push(r);
       for (const ing of PS.data.ingredients) {
-        if (ing.unlockLevel === s.level) s.inventory[ing.id] = Math.min(this.storageCap(), (s.inventory[ing.id] || 0) + 4);
+        if (ing.unlockLevel === s.level && ing.prestige <= s.prestige && !ing.rare) {
+          s.inventory[ing.id] = Math.min(this.storageCap(), (s.inventory[ing.id] || 0) + 4);
+        }
       }
     }
     if (leveled) {

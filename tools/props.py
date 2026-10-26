@@ -316,6 +316,33 @@ def build_table_set():
     return m
 
 
+def build_table_group(n):
+    """Long table for a prestiged shop: n chairs on the north side, 40 px apart in the game."""
+    m = Model("table_group_%d" % n)
+    sp = 40 / 1.35
+    half = (n - 1) * sp / 2 + 26
+    m.box(-half, -20, 24, half * 2, 40, 5, {"all": "wood", "top": "wood"})
+    m.box(-half + 4, -16, 29, half * 2 - 8, 32, 1, {"top": "cloth_trim:e8dcc0:a33a3a", "side": "solid:e8dcc0"})
+    # Trestle legs at both ends and a center brace
+    for sx in (-1, 1):
+        x = sx * (half - 10)
+        m.box(x - 4, -14, 4, 8, 28, 20, {"all": "wood_v_dark"})
+        m.box(x - 6, -18, 0, 12, 36, 5, {"all": "wood_dark"})
+    m.box(-half + 10, -3, 10, half * 2 - 20, 6, 5, {"all": "wood_v_dark"})
+    # Table settings: a plate in front of every chair, candles between them
+    for i in range(n):
+        x = (i - (n - 1) / 2) * sp
+        m.box(x - 6, -14, 30, 12, 10, 1, {"all": "solid:f4efe4"})
+        if i < n - 1:
+            candle(m, x + sp / 2, 2, 30, 6)
+    m.box(-half + 6, 4, 30, 8, 2, 7, {"all": "book_cover:3a5a8a"})
+    for i in range(n):
+        m.offset = ((i - (n - 1) / 2) * sp, -36, 0)
+        build_chair(m)
+    m.offset = (0, 0, 0)
+    return m
+
+
 def build_counter():
     m = Model("counter")
     w, d, h = 150, 34, 30
@@ -595,10 +622,39 @@ def plant_model(name, kind):
         for (dx, dy, h, r) in ((0, 0, 20, 12), (-11, 8, 10, 7)):
             m.box(dx - 2.5, dy - 2.5, 0, 5, 5, h, {"all": "solid:dcfaf5"}, unlit=True)
             m.box(dx - r, dy - r, h, r * 2, r * 2, r * 0.7, {"all": "gem:3cdcd2"}, unlit=True)
+    elif kind == "frostberry":
+        for (dx, dy, h) in ((-8, -4, 20), (8, -6, 24), (0, 8, 18)):
+            m.box(dx - 1, dy - 1, 0, 2, 2, h, {"all": "solid:2f6a4a"})
+            m.box(dx - 6, dy - 2, h - 10, 12, 4, 4, {"all": "leaves:5fa080"})
+            for (bx, bz) in ((-3, h - 2), (3, h), (0, h + 4)):
+                m.box(dx + bx - 2.5, dy - 2.5, bz, 5, 5, 5, {"all": "gem:8cd0ff"}, unlit=True)
+    elif kind == "emberpepper":
+        for (dx, dy, h) in ((-8, -4, 22), (8, 2, 26)):
+            m.box(dx - 1, dy - 1, 0, 2, 2, h, {"all": "solid:3a7a2a"})
+            m.box(dx - 7, dy - 2, h - 12, 14, 4, 4, {"all": "leaves:4f9a3a"})
+            m.box(dx - 3, dy - 3, h - 8, 6, 6, 9, {"all": "gem:ff5a20"}, unlit=True)
+            m.box(dx - 1, dy - 1, h + 1, 2, 2, 2, {"all": "solid:3a7a2a"})
+    elif kind == "shadowmoss":
+        for (dx, dy, r, h) in ((0, 0, 14, 8), (-10, 8, 9, 6), (11, 7, 8, 5), (6, -11, 7, 5)):
+            m.box(dx - r, dy - r, 0, r * 2, r * 2, h, {"all": "leaves:5a3c80", "top": "herb:6a4a96:c8a8ff"})
+        for (dx, dy) in ((-4, -2), (8, 4), (-10, 10)):
+            m.box(dx - 1.5, dy - 1.5, 8, 3, 3, 3, {"all": "solid:d8b8ff"}, unlit=True)
+    elif kind == "luckyclover":
+        for (dx, dy, h) in ((-8, -4, 14), (6, -6, 18), (2, 8, 12), (-6, 9, 10)):
+            m.box(dx - 1, dy - 1, 0, 2, 2, h, {"all": "solid:2f7a4a"})
+            for (lx, ly) in ((-3, -3), (3, -3), (-3, 3), (3, 3)):
+                m.box(dx + lx - 3, dy + ly - 3, h, 6, 6, 1.5, {"all": "leaves:5ac85a"})
+    elif kind == "dragonscale":
+        m.box(-12, -12, 0, 24, 24, 4, {"all": "stone"})
+        for (dx, dy, h, a) in ((0, 0, 30, 0), (-9, 4, 20, -18), (9, 3, 22, 18), (2, -9, 16, 10)):
+            m.box(dx - 4, dy - 1.5, 2, 8, 3, h, {"all": "gem:d03a28"}, rot=(0, a, 0), pivot=(dx, dy, 2), unlit=True)
+            m.box(dx - 2, dy - 2, 2 + h - 6, 4, 4, 6, {"all": "gem:ffc040"}, rot=(0, a, 0), pivot=(dx, dy, 2),
+                  unlit=True)
     return m
 
 
-PLANTS = ["redleaf", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom", "glowcap"]
+PLANTS = ["redleaf", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom", "glowcap",
+          "frostberry", "emberpepper", "shadowmoss", "luckyclover", "dragonscale"]
 
 
 BUILDERS = {
@@ -620,5 +676,7 @@ BUILDERS = {
     "garden": build_garden,
     "plot": build_plot,
 }
+for _n in range(2, 6):
+    BUILDERS["table_group_%d" % _n] = (lambda n=_n: build_table_group(n))
 for _k in PLANTS:
     BUILDERS["plant_" + _k] = (lambda k=_k: plant_model("plant_" + k, k))

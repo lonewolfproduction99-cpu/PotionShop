@@ -128,6 +128,65 @@ def potion_icon(kind, color):
         poly(d, [(48, 48), (60, 64), (58, 78), (48, 84), (38, 78), (36, 64), (44, 58)], (255, 230, 120, 255),
              outline=dark, width=2)
         poly(d, [(48, 64), (54, 72), (52, 80), (44, 80), (43, 72)], (255, 140, 40, 255), outline=None)
+    elif kind == "snow":  # frost: tall bottle with a snowflake
+        rrect(d, (40, 6, 56, 24), 3, glass)
+        rrect(d, (24, 22, 72, 90), 12, glass)
+        rrect(d, (27, 44, 69, 87), 9, c, outline=None)
+        rrect(d, (24, 22, 72, 90), 12, None)
+        for a in (0, 60, 120):
+            ra = math.radians(a)
+            dx, dy = 13 * math.cos(ra), 13 * math.sin(ra)
+            d.line([S(48 - dx), S(66 - dy), S(48 + dx), S(66 + dy)], fill=(255, 255, 255, 255), width=S(3))
+        ellipse(d, (44, 62, 52, 70), (255, 255, 255, 255), outline=dark, width=1)
+    elif kind == "heart":  # love: heart-shaped flask
+        rrect(d, (40, 6, 56, 26), 3, glass)
+        heart = [(48, 90), (16, 58), (14, 40), (24, 26), (38, 24), (48, 34), (58, 24), (72, 26), (82, 40), (80, 58)]
+        poly(d, heart, glass)
+        poly(d, [(48, 86), (20, 58), (18, 48), (78, 48), (76, 58)], c, outline=None)
+        poly(d, heart, None)
+        poly(d, [(48, 76), (38, 66), (38, 60), (43, 57), (48, 61), (53, 57), (58, 60), (58, 66)],
+             (255, 235, 240, 255), outline=dark, width=2)
+    elif kind == "ghost":  # invisibility: faded flask with dotted outline
+        rrect(d, (38, 10, 58, 30), 3, (230, 240, 250, 160))
+        ellipse(d, (16, 26, 80, 90), (220, 235, 245, 140), outline=(43, 27, 23, 140))
+        d.pieslice([S(19), S(29), S(77), S(87)], 0, 180, fill=c[:3] + (170,))
+        d.rectangle([S(19), S(52), S(77), S(58)], fill=c[:3] + (170,))
+        for i in range(16):
+            a = i * math.pi / 8
+            x, y = 48 + 26 * math.cos(a), 58 + 26 * math.sin(a)
+            ellipse(d, (x - 2, y - 2, x + 2, y + 2), (255, 255, 255, 220), outline=None)
+        ellipse(d, (38, 52, 46, 60), (255, 255, 255, 230), outline=None)
+        ellipse(d, (52, 52, 60, 60), (255, 255, 255, 230), outline=None)
+    elif kind == "clover":  # luck: round flask with a four-leaf clover
+        rrect(d, (38, 10, 58, 30), 3, glass)
+        ellipse(d, (16, 26, 80, 90), glass)
+        d.pieslice([S(19), S(29), S(77), S(87)], 0, 180, fill=c)
+        d.rectangle([S(19), S(50), S(77), S(58)], fill=c)
+        ellipse(d, (16, 26, 80, 90), None)
+        for (dx, dy) in ((-7, -7), (7, -7), (-7, 7), (7, 7)):
+            ellipse(d, (48 + dx - 7, 68 + dy - 7, 48 + dx + 7, 68 + dy + 7), (150, 240, 120, 255),
+                    outline=dark, width=2)
+        d.line([S(48), S(68), S(56), S(84)], fill=dark, width=S(2))
+    elif kind == "dragon":  # dragon: square bottle with a scale pattern
+        rrect(d, (38, 8, 58, 26), 3, glass)
+        rrect(d, (18, 24, 78, 90), 6, glass)
+        rrect(d, (21, 42, 75, 87), 4, c, outline=None)
+        rrect(d, (18, 24, 78, 90), 6, None)
+        for row, y in enumerate((52, 62, 72)):
+            for k in range(3 + row % 2):
+                x = 30 + k * 13 - (row % 2) * 6
+                d.arc([S(x), S(y), S(x + 13), S(y + 12)], 0, 180, fill=(255, 220, 120, 255), width=S(2))
+    elif kind == "elixir":  # elixir: tall ornate bottle with a crown star
+        rrect(d, (40, 4, 56, 22), 3, glass)
+        poly(d, [(40, 20), (56, 20), (74, 44), (68, 90), (28, 90), (22, 44)], glass)
+        poly(d, [(25, 50), (71, 50), (66, 87), (30, 87)], c, outline=None)
+        poly(d, [(40, 20), (56, 20), (74, 44), (68, 90), (28, 90), (22, 44)], None)
+        pts = []
+        for i in range(10):
+            a = -math.pi / 2 + i * math.pi / 5
+            rr = 12 if i % 2 == 0 else 5
+            pts.append((48 + rr * math.cos(a), 68 + rr * math.sin(a)))
+        poly(d, pts, (255, 250, 200, 255), outline=dark, width=2)
     else:  # sludge
         rrect(d, (38, 8, 58, 26), 3, glass)
         ellipse(d, (18, 28, 78, 90), glass)
@@ -226,6 +285,37 @@ def ingredient_icon(kind):
         d.line([S(12), S(46), S(84), S(46)], fill=OUTLINE, width=S(3))
         for (x, y, r) in ((30, 32, 5), (50, 22, 6), (68, 34, 4)):
             ellipse(d, (x - r, y - r, x + r, y + r), (230, 255, 250, 255), outline=None)
+    elif kind == "frostberry":  # cluster of icy blue berries
+        d.line([S(48), S(8), S(48), S(30)], fill=hexc("2f7a4a"), width=S(4))
+        poly(d, [(48, 16), (70, 8), (62, 22)], hexc("4fa060"), width=2)
+        for (x, y) in ((34, 44), (60, 44), (48, 34), (28, 64), (48, 60), (68, 64), (40, 80), (58, 80)):
+            ellipse(d, (x - 11, y - 11, x + 11, y + 11), (120, 200, 255, 255), width=2)
+            ellipse(d, (x - 6, y - 7, x - 1, y - 2), (240, 250, 255, 255), outline=None)
+    elif kind == "emberpepper":  # glowing red-orange pepper
+        ellipse(d, (14, 14, 82, 82), (255, 140, 60, 60), outline=None)
+        poly(d, [(36, 24), (62, 22), (70, 40), (64, 64), (48, 86), (42, 84), (46, 64), (32, 44)],
+             (230, 70, 30, 255))
+        poly(d, [(40, 30), (50, 30), (44, 56)], (255, 170, 60, 255), outline=None)
+        rrect(d, (42, 10, 54, 26), 3, hexc("4fa060"), width=2)
+    elif kind == "shadowmoss":  # dark purple moss clump
+        ellipse(d, (10, 40, 86, 90), (70, 50, 100, 255))
+        for (x, y, r) in ((28, 46, 14), (50, 38, 16), (70, 48, 13), (38, 64, 14), (62, 66, 14)):
+            ellipse(d, (x - r, y - r, x + r, y + r), (96, 66, 140, 255), width=2)
+        for (x, y) in ((30, 40), (54, 32), (66, 58)):
+            ellipse(d, (x - 3, y - 3, x + 3, y + 3), (210, 180, 255, 255), outline=None)
+    elif kind == "luckyclover":  # four-leaf clover
+        d.line([S(48), S(50), S(60), S(92)], fill=hexc("2f7a4a"), width=S(5))
+        for (dx, dy) in ((-14, -14), (14, -14), (-14, 14), (14, 14)):
+            cx, cy = 48 + dx, 44 + dy
+            ellipse(d, (cx - 15, cy - 15, cx + 15, cy + 15), (90, 200, 90, 255), width=3)
+            d.line([S(48), S(44), S(cx), S(cy)], fill=hexc("2f7a4a"), width=S(2))
+        ellipse(d, (42, 38, 54, 50), (255, 220, 90, 255), width=2)
+    elif kind == "dragonscale":  # big shiny red-gold scale
+        ellipse(d, (8, 8, 88, 88), (255, 200, 80, 60), outline=None)
+        poly(d, [(48, 8), (78, 30), (74, 64), (48, 90), (22, 64), (18, 30)], (200, 50, 40, 255))
+        poly(d, [(48, 20), (66, 34), (63, 60), (48, 76), (33, 60), (30, 34)], (240, 110, 50, 255), outline=None)
+        d.line([S(48), S(20), S(48), S(76)], fill=(255, 210, 110, 255), width=S(3))
+        shine(d, (32, 32, 40, 46))
     return done(img, 96, 96)
 
 
@@ -389,6 +479,30 @@ def icon(kind):
         rrect(d, (34, 54, 62, 74), 4, (245, 245, 235, 255), width=3)
         ellipse(d, (32, 32, 44, 46), OUTLINE, outline=None)
         ellipse(d, (52, 32, 64, 46), OUTLINE, outline=None)
+    elif kind == "ad":  # rewarded video: screen with a play triangle
+        rrect(d, (6, 16, 90, 78), 10, (70, 110, 190, 255), width=4)
+        rrect(d, (14, 24, 82, 70), 6, (30, 40, 70, 255), outline=None)
+        poly(d, [(40, 32), (62, 47), (40, 62)], (255, 255, 255, 255), width=2)
+        rrect(d, (36, 78, 60, 88), 3, (90, 94, 106, 255), width=3)
+    elif kind == "crown":  # prestige
+        poly(d, [(10, 30), (30, 52), (48, 16), (66, 52), (86, 30), (78, 78), (18, 78)], (255, 200, 50, 255),
+             width=4)
+        rrect(d, (16, 74, 80, 88), 3, (230, 160, 40, 255), width=3)
+        for x in (32, 48, 64):
+            ellipse(d, (x - 5, 56, x + 5, 66), (220, 60, 80, 255), width=2)
+    elif kind == "seed":  # seed pouch
+        poly(d, [(30, 30), (66, 30), (80, 76), (64, 90), (32, 90), (16, 76)], (190, 140, 90, 255), width=3)
+        rrect(d, (28, 22, 68, 34), 4, (150, 100, 60, 255), width=3)
+        for (x, y) in ((38, 56), (54, 62), (46, 74), (60, 48)):
+            ellipse(d, (x - 5, y - 4, x + 5, y + 4), (110, 70, 40, 255), outline=None)
+        d.line([S(48), S(20), S(48), S(6)], fill=hexc("4fa060"), width=S(4))
+        poly(d, [(48, 10), (66, 2), (60, 16)], hexc("5fb04a"), width=2)
+    elif kind == "closed":  # closed sign
+        d.line([S(30), S(8), S(48), S(26)], fill=OUTLINE, width=S(3))
+        d.line([S(66), S(8), S(48), S(26)], fill=OUTLINE, width=S(3))
+        rrect(d, (6, 26, 90, 76), 8, (200, 70, 60, 255), width=4)
+        rrect(d, (14, 34, 82, 68), 4, (240, 220, 190, 255), outline=None)
+        d.line([S(26), S(51), S(70), S(51)], fill=(200, 70, 60, 255), width=S(8))
     elif kind == "quality":
         poly(d, [(48, 6), (86, 36), (48, 90), (10, 36)], (120, 220, 240, 255), width=4)
         poly(d, [(48, 6), (66, 36), (48, 90), (30, 36)], (170, 240, 255, 255), width=2)
@@ -547,16 +661,18 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     potions = {"healing": ("round", "e0303a"), "energy": ("bolt", "ffb020"), "mana": ("vial", "3a7cff"),
                "strength": ("square", "b0602d"), "speed": ("wing", "39d98a"), "sludge": ("sludge", "6a7a4a"),
-               "night": ("moon", "5a3aa0"), "fire": ("flame", "e0502a")}
+               "night": ("moon", "5a3aa0"), "fire": ("flame", "e0502a"), "frost": ("snow", "7cd4ff"),
+               "love": ("heart", "ff5a9a"), "invisibility": ("ghost", "b8c8e0"), "luck": ("clover", "48c060"),
+               "dragon": ("dragon", "c03020"), "elixir": ("elixir", "f0c030")}
     for name, (kind, col) in potions.items():
         potion_icon(kind, col).save(os.path.join(OUT, "potion_%s.png" % name))
     for name in ("redleaf", "moonwater", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom",
-                 "glowcap"):
+                 "glowcap", "frostberry", "emberpepper", "shadowmoss", "luckyclover", "dragonscale"):
         ingredient_icon(name).save(os.path.join(OUT, "ing_%s.png" % name))
     for name in ("coin", "heart", "star", "gear", "orders", "bag", "upgrades", "workers", "expand", "close",
                  "check", "plus", "lock", "hourglass", "broom", "brew", "order", "book", "sparkle", "exclaim",
                  "sound", "trash", "speed", "tables", "patience", "quality", "garden", "back", "goggles",
-                 "skull", "hand"):
+                 "skull", "hand", "ad", "crown", "seed", "closed"):
         icon(name).save(os.path.join(OUT, "icon_%s.png" % name))
     for name in ("happy", "neutral", "annoyed", "angry"):
         mood_icon(name).save(os.path.join(OUT, "mood_%s.png" % name))

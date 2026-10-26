@@ -18,6 +18,7 @@ PS.Nav = class {
       this.blockRect(b.getX(), b.getY(), b.getX() + b.getWidth(), b.getY() + b.getHeight(), this.radius);
     }
     for (const o of runtimeScene.getObjects('NavObstacles')) {
+      if (o.isHidden()) continue; // e.g. decorations moved aside for long tables
       const aabb = o.getAABB();
       this.blockRect(aabb.min[0], aabb.min[1], aabb.max[0], aabb.max[1], this.radius);
     }

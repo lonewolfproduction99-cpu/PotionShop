@@ -26,21 +26,46 @@ PS.World = {
     G.queue = [];
     G.workerHomes = homes.sort((a, b) => a.order - b.order).map((h) => h.p);
 
-    // --- Tables (each TableSet has one chair = one seat).
-    G.seats = scene
+    // --- Table slots. Each TableSet instance is a slot; after prestiges a slot
+    // holds a long table with up to 5 chairs (one seat per chair).
+    const n = G.groupSize();
+    G.slots = scene
       .getObjects('TableSet')
-      .map((t) => ({
-        order: PS.varNum(t, 'Order', 99),
-        obj: t,
-        x: t.getX(),
-        y: t.getY() + PS.K.seatOffsetY,
-        standX: t.getX() + (t.getX() < 320 ? PS.K.tableStandX : -PS.K.tableStandX),
-        standY: t.getY() + PS.K.tableStandY,
-        occupant: null,
-        unlocked: false,
-        sign: null,
-      }))
+      .map((t) => ({ order: PS.varNum(t, 'Order', 99), anchor: t, x: t.getX(), y: t.getY(), unlocked: false, sign: null }))
       .sort((a, b) => a.order - b.order);
+    G.seats = [];
+    // Long tables move a little toward the middle aisle so they fit the room.
+    const shift = n >= 3 ? Math.min(36, (n - 2) * 12) : 0;
+    for (const slot of G.slots) {
+      if (n > 1) {
+        slot.anchor.hide(true);
+        if (shift) slot.x += slot.x < G.door[0] ? shift : -shift;
+        slot.group = PS.create(scene, 'TableGroup' + n, slot.x, slot.y, '');
+      } else {
+        slot.group = slot.anchor;
+      }
+      slot.seats = [];
+      for (let i = 0; i < n; i++) {
+        const sx = slot.x + (i - (n - 1) / 2) * PS.K.chairSpacing;
+        const seat = { slot, x: sx, y: slot.y + PS.K.seatOffsetY, standX: sx, standY: slot.y + PS.K.tableStandSouth,
+          occupant: null, unlocked: false };
+        slot.seats.push(seat);
+        G.seats.push(seat);
+      }
+    }
+
+    // Small decorations in the way of a long table are put away.
+    if (n > 1) {
+      const tables = G.slots.map((sl) => sl.group.getAABB()).map((a) => [a.min[0], a.min[1], a.max[0], a.max[1]]);
+      for (const name of ['Plant', 'Candelabra', 'Barrel', 'Crates']) {
+        for (const o of scene.getObjects(name)) {
+          const a = o.getAABB();
+          if (tables.some((t) => a.min[0] < t[2] + 12 && a.max[0] > t[0] - 12 && a.min[1] < t[3] && a.max[1] > t[1])) {
+            o.hide(true);
+          }
+        }
+      }
+    }
 
     // --- Cauldrons.
     G.cauldrons = scene
@@ -83,7 +108,7 @@ PS.World = {
   },
 
   tablesUnlocked(G) {
-    return Math.min(G.seats.length, 3 + (G.state.upgrades.extra_table || 0));
+    return Math.min(G.slots.length, 3 + (G.state.upgrades.extra_table || 0));
   },
   cauldronsUnlocked(G) {
     return Math.min(G.cauldrons.length, 1 + (G.state.upgrades.extra_cauldron || 0));
@@ -93,16 +118,18 @@ PS.World = {
   applyUnlocks(G) {
     const scene = G.scene;
     const nt = this.tablesUnlocked(G);
-    G.seats.forEach((s, i) => {
-      s.unlocked = i < nt;
-      s.obj.hide(!s.unlocked);
+    G.slots.forEach((slot, i) => {
+      const was = slot.unlocked;
+      slot.unlocked = i < nt;
+      slot.group.hide(!slot.unlocked);
+      slot.seats.forEach((st) => (st.unlocked = slot.unlocked));
       const wantSign = i === nt;
-      if (wantSign && !s.sign) {
-        s.sign = PS.create(scene, 'SlotSign', s.obj.getX(), s.obj.getY(), '');
-      } else if (!wantSign && s.sign) {
-        PS.destroy(s.sign);
-        s.sign = null;
+      if (wantSign && !slot.sign) slot.sign = PS.create(scene, 'SlotSign', slot.x, slot.y, '');
+      else if (!wantSign && slot.sign) {
+        PS.destroy(slot.sign);
+        slot.sign = null;
       }
+      if (slot.unlocked && !was && G.started) PS.FX.sparkleAt(G, slot.x, slot.y, 50);
     });
     const nc = this.cauldronsUnlocked(G);
     G.cauldrons.forEach((c, i) => {
@@ -123,12 +150,6 @@ PS.World = {
       }
       if (c.unlocked && !was && G.started) PS.FX.sparkleAt(G, c.x, c.y, 80);
     });
-    if (G.started) {
-      G.seats.forEach((s) => {
-        if (s.unlocked && s._shown !== true && s._shown !== undefined) PS.FX.sparkleAt(G, s.obj.getX(), s.obj.getY(), 50);
-      });
-    }
-    G.seats.forEach((s) => (s._shown = s.unlocked));
     this.fillSeatsFromQueue(G);
   },
 
@@ -145,27 +166,43 @@ PS.World = {
     G.spawnTimer -= dt;
     if (G.spawnTimer > 0) return;
     const b = PS.data.balance;
-    const capacity = this.tablesUnlocked(G) + b.queueSize;
-    if (this.activeCustomers(G) >= capacity) {
+    const capacity = G.seats.filter((st) => st.unlocked).length + b.queueSize;
+    if (G.state.closed || this.activeCustomers(G) >= capacity) {
       G.spawnTimer = 1;
       return;
     }
     const base = Math.max(b.spawnIntervalMin, b.spawnIntervalStart - (G.state.level - 1) * 0.8);
     // Happy customers spread the word: a busier shop when satisfaction is high.
     const word = 1.25 - 0.5 * (G.state.satisfaction / 100);
-    G.spawnTimer = base * word * U.rand(0.75, 1.25);
+    // Long tables (after prestiges) seat more people: customers come more often.
+    const groups = 1 + 0.5 * (G.groupSize() - 1);
+    G.spawnTimer = (base * word * U.rand(0.75, 1.25)) / groups;
     this.spawnCustomer(G);
   },
 
   spawnCustomer(G) {
     const level = G.state.level;
     const types = PS.data.customers.filter((t) => t.minLevel <= level);
-    const recipes = PS.data.recipes.filter((r) => r.unlockLevel <= level);
+    const recipes = PS.Brewing.knownRecipes(G);
     if (!types.length || !recipes.length) return null;
     const type = U.pick(types);
     const spawn = U.pick(G.spawns);
     const obj = PS.create(G.scene, type.object, spawn[0], spawn[1], '');
-    const patience = type.patience * G.mult('cozy_decor', +1) * U.rand(0.9, 1.1);
+    // After prestiges customers may order several potions at once (fewer is more likely).
+    const max = G.maxOrderItems();
+    const weights = [5, 3, 2, 1.5, 1].slice(0, max);
+    let roll = Math.random() * weights.reduce((a, b) => a + b, 0);
+    let count = 1;
+    for (let i = 0; i < weights.length; i++) {
+      roll -= weights[i];
+      if (roll <= 0) {
+        count = i + 1;
+        break;
+      }
+    }
+    const items = [];
+    for (let i = 0; i < count; i++) items.push({ recipe: U.pick(recipes), done: false, reserved: false, quality: 1 });
+    const patience = type.patience * G.mult('cozy_decor', +1) * G.patienceMult() * (1 + 0.6 * (count - 1)) * U.rand(0.9, 1.1);
     const c = {
       id: G.nextCustomerId++,
       type,
@@ -173,11 +210,11 @@ PS.World = {
       speed: type.speed * G.mult('swift_shoes', +0.5),
       state: 'arriving',
       seat: null,
-      recipe: U.pick(recipes),
+      items,
+      recipe: items[0].recipe, // first potion still wanted (kept up to date for display)
       patience,
       maxPatience: patience,
       orderedAt: 0,
-      deliveryReserved: false,
       timer: 0,
       path: null,
       anim: '',
@@ -245,18 +282,44 @@ PS.World = {
     this.fillSeatsFromQueue(G);
   },
 
-  // Called when a potion is handed over.
-  serve(G, c, recipe, quality) {
-    const q = PS.QUALITY[quality === undefined ? 1 : quality];
+  // One potion of an order handed over; the customer pays when all arrived.
+  deliverItem(G, c, recipe, quality) {
+    const item = PS.Order.deliver(c, recipe.id, quality);
+    if (!item) return false;
+    if (PS.Order.remaining(c) > 0) {
+      PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, PS.Order.remaining(c) + ' more to go', recipe.icon);
+      PS.Audio.play(G, 'pop');
+      PS.UI.markDirty(G);
+      return true;
+    }
+    this.serve(G, c);
+    return true;
+  },
+
+  // Every potion delivered: pay for all of them and leave happy.
+  serve(G, c) {
     const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
     const tip = 1 + PS.data.balance.tipMax * ratio;
-    const price = Math.round(recipe.price * q.price * G.mult('fine_bottles', +1) * tip * c.type.tip);
+    let price = 0;
+    let mood = 0;
+    let best = 1;
+    for (const it of c.items) {
+      const q = PS.QUALITY[it.quality];
+      price += G.potionPrice(it.recipe) * q.price;
+      mood += q.mood;
+      best = Math.max(best, it.quality);
+    }
+    price = Math.round(price * tip * c.type.tip);
+    mood /= c.items.length;
     G.addGold(price);
     G.state.served += 1;
     G.state.earned += price;
-    G.addXp(PS.data.balance.xpPerServe + Math.round(5 * ratio));
-    G.recordSatisfaction(U.clamp(50 + 50 * ratio + q.mood, 0, 100));
-    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, '+' + price + (quality !== 1 ? '  ' + q.name + '!' : ''), 'icon_coin');
+    G.addXp((PS.data.balance.xpPerServe + Math.round(5 * ratio)) * c.items.length);
+    G.recordSatisfaction(U.clamp(50 + 50 * ratio + mood, 0, 100));
+    const label = '+' + U.formatGold(price) + (best >= 2 ? '  ' + PS.QUALITY[best].name + '!' : '');
+    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, label, 'icon_coin');
+    // Delighted customers (served before patience dropped below 90%) may leave a special herb.
+    if (ratio >= 0.9 && Math.random() < PS.data.balance.giftChance) this.gift(G, c);
     c.state = 'served';
     c.timer = 1.3;
     c.obj.setZ(0);
@@ -267,6 +330,45 @@ PS.World = {
       c.seat = null;
     }
     this.fillSeatsFromQueue(G);
+  },
+
+  gift(G, c) {
+    const herb = PS.data.ingredientById[Math.random() < 0.5 ? 'starbloom' : 'glowcap'];
+    const inv = G.state.inventory;
+    if ((inv[herb.id] || 0) >= G.storageCap()) return;
+    inv[herb.id] = (inv[herb.id] || 0) + 1;
+    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 130, 'Gift: ' + herb.name + '!', herb.icon);
+    PS.Audio.play(G, 'levelup');
+  },
+
+  // Satisfaction hit rock bottom: nobody comes until the shop is reopened.
+  checkClosing(G) {
+    if (!G.state.closed && G.state.satisfaction <= PS.data.balance.closeAt) {
+      G.state.closed = true;
+      G.saveNow();
+      PS.UI.open(G, 'closed');
+      PS.Audio.play(G, 'angry');
+    }
+  },
+  reopenCost(G) {
+    return Math.max(100, Math.round(G.state.incomeRate * 4));
+  },
+  reopen(G, withGems) {
+    const s = G.state;
+    if (withGems) {
+      if (s.gems < PS.data.balance.reopenGems) return false;
+      s.gems -= PS.data.balance.reopenGems;
+    } else {
+      const cost = this.reopenCost(G);
+      if (s.gold < cost) return false;
+      G.addGold(-cost);
+    }
+    s.closed = false;
+    s.satisfaction = 55;
+    G.spawnTimer = 2;
+    G.saveNow();
+    PS.UI.toast(G, 'The shop is open again!');
+    return true;
   },
 
   // ----------------------------------------------------------- per frame
@@ -335,6 +437,7 @@ PS.World = {
       }
     }
     this.updateSpawning(G, dt);
+    this.checkClosing(G);
     void b;
   },
 
@@ -362,6 +465,72 @@ PS.World = {
   // Orders that were taken and are still waiting for a potion, oldest first.
   pendingOrders(G) {
     return G.customers.filter((c) => c.state === 'ordered').sort((a, b) => a.orderedAt - b.orderedAt);
+  },
+
+  // Potions customers still want: taken orders first (oldest first), then
+  // seated customers who have not ordered yet. One entry per potion.
+  wantedItems(G) {
+    const seated = G.customers.filter((c) => c.state === 'waitingOrder').sort((a, b) => a.seatedAt - b.seatedAt);
+    const out = [];
+    for (const c of this.pendingOrders(G).concat(seated)) {
+      for (const it of c.items) if (!it.done) out.push({ customer: c, recipe: it.recipe });
+    }
+    return out;
+  },
+
+  // The oldest wanted potion that nobody is brewing, carrying or storing yet.
+  uncoveredItem(G, filter) {
+    const counted = {};
+    for (const w of this.wantedItems(G)) {
+      const id = w.recipe.id;
+      counted[id] = (counted[id] || 0) + 1;
+      if (PS.Brewing.plannedFor(G, id) < counted[id] && (!filter || filter(w.recipe))) return w;
+    }
+    return null;
+  },
+};
+
+// Order items of a customer: { recipe, done, reserved (a worker is bringing
+// it), quality }.
+PS.Order = {
+  // Replace a customer's order with these recipes.
+  set(c, recipes) {
+    c.items = recipes.map((recipe) => ({ recipe, done: false, reserved: false, quality: 1 }));
+    c.recipe = recipes[0];
+  },
+  remaining(c) {
+    return c.items.filter((i) => !i.done).length;
+  },
+  // An item of this potion nobody is bringing yet.
+  need(c, recipeId) {
+    return c.items.find((i) => !i.done && !i.reserved && i.recipe.id === recipeId) || null;
+  },
+  needsAny(c) {
+    return c.items.filter((i) => !i.done && !i.reserved);
+  },
+  reserve(c, recipeId) {
+    const it = this.need(c, recipeId);
+    if (it) it.reserved = true;
+    return it;
+  },
+  unreserve(c, recipeId) {
+    const it = c.items.find((i) => !i.done && i.reserved && i.recipe.id === recipeId);
+    if (it) it.reserved = false;
+  },
+  // Is a worker bringing this potion (or could bring it)?
+  wants(c, recipeId) {
+    return c.items.some((i) => !i.done && i.recipe.id === recipeId);
+  },
+  deliver(c, recipeId, quality) {
+    const it = c.items.find((i) => !i.done && i.reserved && i.recipe.id === recipeId) ||
+      c.items.find((i) => !i.done && i.recipe.id === recipeId);
+    if (!it) return null;
+    it.done = true;
+    it.reserved = false;
+    it.quality = quality === undefined ? 1 : quality;
+    const next = c.items.find((i) => !i.done);
+    if (next) c.recipe = next.recipe;
+    return it;
   },
 };
 

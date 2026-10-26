@@ -181,7 +181,9 @@ def build_objects(manifest):
     for name, model in (("Counter", "counter"), ("IngredientShelf", "ingredient_shelf"),
                         ("PotionRack", "potion_rack"), ("Bookshelf", "bookshelf"), ("Barrel", "barrel"),
                         ("Crates", "crates"), ("Plant", "plant"), ("Candelabra", "candelabra"),
-                        ("TableSet", "table_set"), ("Cauldron", "cauldron"), ("SlotSign", "slot_sign")):
+                        ("TableSet", "table_set"), ("Cauldron", "cauldron"), ("SlotSign", "slot_sign"),
+                        ("TableGroup2", "table_group_2"), ("TableGroup3", "table_group_3"),
+                        ("TableGroup4", "table_group_4"), ("TableGroup5", "table_group_5")):
         objs.append(model_object(name, model, manifest))
     for o in objs:
         if o["name"] in ("TableSet", "Cauldron"):
@@ -225,7 +227,8 @@ def build_objects(manifest):
     return objs
 
 
-PLANTS = ["redleaf", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom", "glowcap"]
+PLANTS = ["redleaf", "sunroot", "sparkdust", "bluecap", "ironroot", "swiftmint", "starbloom", "glowcap",
+          "frostberry", "emberpepper", "shadowmoss", "luckyclover", "dragonscale"]
 # Objects used by both scenes are project-wide (global) objects.
 GLOBAL_OBJECTS = {"Icon", "RingFill", "RingBack", "SpeechBubble", "Glow", "PanelWood", "PanelParchment", "PanelDark",
                   "BtnGreen", "BtnGold", "BtnRed", "BtnGray", "BtnBlue", "BtnPurple", "BarBack", "BarFill", "UiText",
@@ -233,7 +236,7 @@ GLOBAL_OBJECTS = {"Icon", "RingFill", "RingBack", "SpeechBubble", "Glow", "Panel
 GARDEN_OBJECTS = {"Garden", "Plot"} | {"Plant" + k.capitalize() for k in PLANTS}
 
 
-NAV_OBSTACLES = ["TableSet", "Cauldron", "Counter", "IngredientShelf", "PotionRack", "Bookshelf", "Barrel",
+NAV_OBSTACLES = ["TableSet", "TableGroup2", "TableGroup3", "TableGroup4", "TableGroup5", "Cauldron", "Counter", "IngredientShelf", "PotionRack", "Bookshelf", "Barrel",
                  "Crates", "Plant", "Candelabra"]
 
 
@@ -338,15 +341,39 @@ RECIPES = [
          Color="110;70;200", Icon="potion_night", UnlockLevel=5),
     dict(Id="fire", Bonus="bluecap", Name="Fire Shield Potion", Ingredients=["ironroot", "sunroot"], Price=52, BrewTime=11,
          Color="235;90;40", Icon="potion_fire", UnlockLevel=6),
+    # Prestige potions: customers only ask for them after enough prestiges.
+    dict(Id="frost", Bonus="sparkdust", Name="Frost Potion", Ingredients=["frostberry", "moonwater"], Price=60,
+         BrewTime=11, Color="124;212;255", Icon="potion_frost", UnlockLevel=3, Prestige=1),
+    dict(Id="love", Bonus="frostberry", Name="Love Potion", Ingredients=["emberpepper", "redleaf"], Price=68,
+         BrewTime=12, Color="255;90;154", Icon="potion_love", UnlockLevel=6, Prestige=1),
+    dict(Id="invisibility", Bonus="swiftmint", Name="Invisibility Potion", Ingredients=["shadowmoss", "moonwater"],
+         Price=80, BrewTime=13, Color="184;200;224", Icon="potion_invisibility", UnlockLevel=4, Prestige=2),
+    dict(Id="luck", Bonus="sparkdust", Name="Luck Potion", Ingredients=["luckyclover", "sunroot"], Price=92,
+         BrewTime=13, Color="72;192;96", Icon="potion_luck", UnlockLevel=8, Prestige=2),
+    dict(Id="dragon", Bonus="ironroot", Name="Dragon Potion", Ingredients=["dragonscale", "emberpepper"], Price=110,
+         BrewTime=14, Color="192;48;32", Icon="potion_dragon", UnlockLevel=5, Prestige=3),
+    dict(Id="elixir", Bonus="frostberry", Name="Grand Elixir", Ingredients=["dragonscale", "luckyclover"], Price=140,
+         BrewTime=16, Color="240;192;48", Icon="potion_elixir", UnlockLevel=10, Prestige=3),
 ]
 INGREDIENTS = [
-    dict(Id="redleaf", Name="Redleaf", Cost=2, Bundle=5, Icon="ing_redleaf", UnlockLevel=1),
-    dict(Id="moonwater", Name="Moonwater", Cost=2, Bundle=5, Icon="ing_moonwater", UnlockLevel=1),
-    dict(Id="sunroot", Name="Sunroot", Cost=3, Bundle=5, Icon="ing_sunroot", UnlockLevel=1),
-    dict(Id="sparkdust", Name="Sparkdust", Cost=3, Bundle=5, Icon="ing_sparkdust", UnlockLevel=1),
-    dict(Id="bluecap", Name="Bluecap", Cost=4, Bundle=5, Icon="ing_bluecap", UnlockLevel=2),
-    dict(Id="ironroot", Name="Ironroot", Cost=5, Bundle=5, Icon="ing_ironroot", UnlockLevel=3),
-    dict(Id="swiftmint", Name="Swiftmint", Cost=6, Bundle=5, Icon="ing_swiftmint", UnlockLevel=4),
+    dict(Id="redleaf", Name="Redleaf", Cost=2, Bundle=5, Icon="ing_redleaf", UnlockLevel=1, GrowTime=30),
+    dict(Id="moonwater", Name="Moonwater", Cost=2, Bundle=5, Icon="ing_moonwater", UnlockLevel=1, GrowTime=30),
+    dict(Id="sunroot", Name="Sunroot", Cost=3, Bundle=5, Icon="ing_sunroot", UnlockLevel=1, GrowTime=40),
+    dict(Id="sparkdust", Name="Sparkdust", Cost=3, Bundle=5, Icon="ing_sparkdust", UnlockLevel=1, GrowTime=45),
+    dict(Id="bluecap", Name="Bluecap", Cost=4, Bundle=5, Icon="ing_bluecap", UnlockLevel=2, GrowTime=70),
+    dict(Id="ironroot", Name="Ironroot", Cost=5, Bundle=5, Icon="ing_ironroot", UnlockLevel=3, GrowTime=100),
+    dict(Id="swiftmint", Name="Swiftmint", Cost=6, Bundle=5, Icon="ing_swiftmint", UnlockLevel=4, GrowTime=130),
+    dict(Id="frostberry", Name="Frostberry", Cost=8, Bundle=5, Icon="ing_frostberry", UnlockLevel=3, Prestige=1,
+         GrowTime=180),
+    dict(Id="emberpepper", Name="Emberpepper", Cost=9, Bundle=5, Icon="ing_emberpepper", UnlockLevel=6, Prestige=1,
+         GrowTime=200),
+    dict(Id="shadowmoss", Name="Shadowmoss", Cost=14, Bundle=5, Icon="ing_shadowmoss", UnlockLevel=4, Prestige=2,
+         GrowTime=260),
+    dict(Id="luckyclover", Name="Lucky Clover", Cost=15, Bundle=5, Icon="ing_luckyclover", UnlockLevel=8,
+         Prestige=2, GrowTime=280),
+    dict(Id="dragonscale", Name="Dragonscale", Cost=25, Bundle=5, Icon="ing_dragonscale", UnlockLevel=5,
+         Prestige=3, GrowTime=400),
+    # Special herbs: from garden harvests and delighted customers (and the shop from level 6).
     dict(Id="starbloom", Name="Starbloom", Cost=40, Bundle=1, Icon="ing_starbloom", UnlockLevel=6, Rare=True),
     dict(Id="glowcap", Name="Glowcap", Cost=30, Bundle=1, Icon="ing_glowcap", UnlockLevel=6, Rare=True),
 ]
@@ -392,7 +419,8 @@ BALANCE = dict(StartGold=40, StartIngredients=6, XpPerServe=10, SpawnIntervalSta
                CollectTime=0.8, DeliverTime=0.7, TipMax=0.5, SludgePrice=0,
                ApprenticeSlowness=1.15, WorkerUpgradeBase=50, WorkerUpgradeGrowth=1.65,
                AccidentWrongExtra=0.55, AccidentSludge=0.4, CleanTime=3, GardenRegrow=45, GardenRareChance=0.08,
-               GardenLevel=2)
+               GardenLevel=2, PrestigeCostMult=5, PrestigePriceMult=3, PrestigeHerbMult=2, PrestigeGems=20,
+               LevelGems=3, GiftChance=0.3, CloseAt=8, ReopenGems=15, AdDailyLimit=10, HarvestRareChance=0.12)
 
 
 # ---------------------------------------------------------------- events
