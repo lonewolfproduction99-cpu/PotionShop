@@ -27,6 +27,12 @@ module.exports = async ({ shot, sleep, evalG, tapGame, page }) => {
     console.log('timeout: ' + label);
     return false;
   };
+  // The development build shows the labelled simulated ad (pwa/ads.js): wait for its Claim button.
+  const claimSimAd = async () => {
+    await page.waitForSelector('#potion-sim-claim:not([disabled])', { timeout: 30000 });
+    await page.click('#potion-sim-claim');
+    await sleep(900);
+  };
   // The ad countdown is in real seconds: wait until its Claim button is enabled.
   const waitClaim = () => waitFor((pre) => { const G = eval(pre + ' G'); return !!(G.ui.panel && G.ui.panel.hits.some((h) => h.label === 'claimAd')); }, 'ad countdown', 60, sceneG());
   const reload = async () => {
@@ -148,8 +154,7 @@ module.exports = async ({ shot, sleep, evalG, tapGame, page }) => {
   await tapHit('reopenAd');
   const adPanel = await evalG(() => gdjs.PotionShop.game.ui.panel && gdjs.PotionShop.game.ui.panel.name);
   await shot('95_ad');
-  await waitClaim();
-  await tapHit('claimAd');
+  await claimSimAd();
   const re2 = await evalG(() => { const G = gdjs.PotionShop.game; return { closed: G.state.closed, ads: G.state.ads.count }; });
   check('reopen by watching a rewarded ad (counts toward the daily limit)', adPanel === 'ad' && !re2.closed && re2.ads === 1, JSON.stringify(re2));
   const limit = await evalG(() => { const PS = gdjs.PotionShop; const G = PS.game; G.state.ads.count = PS.data.balance.adDailyLimit;
@@ -186,8 +191,7 @@ module.exports = async ({ shot, sleep, evalG, tapGame, page }) => {
   const sp1 = await evalG(() => { const g = gdjs.PotionShop.game.scene.getGame().getSceneStack().getCurrentScene().__garden; return g.ui.panel && g.ui.panel.name; });
   await shot('98_speedup');
   await tapHit('speedAd');
-  await waitClaim();
-  await tapHit('claimAd');
+  await claimSimAd();
   const halved = await evalG(() => { const g = gdjs.PotionShop.game.scene.getGame().getSceneStack().getCurrentScene().__garden; return Math.round(g.secondsLeft(g.plots.filter((p) => !p.isWell)[0])); });
   check('speed-up panel; an ad halves the growing time', sp1 === 'speedup' && halved < planted.left * 0.6, sp1 + ' ' + planted.left + 's -> ' + halved + 's');
   await tapPlot(plots[0]);

@@ -22,6 +22,21 @@ PS.UI = {
   H(G) {
     return G.scene.getGame().getGameResolutionHeight();
   },
+  // Height (game units) hidden by the iPhone home indicator, from the PWA
+  // layer's safe-area probe; 0 elsewhere.
+  safeBottom(G) {
+    const pwa = typeof window !== 'undefined' && window.PotionShopPWA;
+    if (!pwa || !pwa.safeInsets) return 0;
+    const css = pwa.safeInsets().bottom;
+    if (!css) return 0;
+    const canvas = G.scene.getGame().getRenderer().getCanvas();
+    const h = (canvas && canvas.getBoundingClientRect().height) || window.innerHeight;
+    return h ? (css * this.H(G)) / h : 0;
+  },
+  // Bottom of the usable screen area.
+  bottom(G) {
+    return this.H(G) - this.safeBottom(G);
+  },
 
   obj(G, name, x, y, layer, list, z) {
     const o = PS.create(G.scene, name, x, y, layer || 'UI');
@@ -193,22 +208,23 @@ PS.UI = {
       ['workers', 'icon_workers', 'Workers'],
       ['expand', 'icon_expand', 'Expand'],
     ];
+    const B = this.bottom(G); // above the iPhone home indicator
     const navH = 118;
-    this.panelBox(G, 'PanelWood', -10, H - navH - 8, W + 20, navH + 24, L, 10);
+    this.panelBox(G, 'PanelWood', -10, B - navH - 8, W + 20, navH + 24 + (H - B), L, 10);
     const bw = (W - 24) / tabs.length;
     hud.tabs = {};
     tabs.forEach(([id, ic, label], i) => {
       const x = 12 + i * bw;
-      const sel = this.panelBox(G, 'BtnGold', x + 4, H - navH + 6, bw - 8, navH - 20, L, 11);
+      const sel = this.panelBox(G, 'BtnGold', x + 4, B - navH + 6, bw - 8, navH - 20, L, 11);
       sel.hide(true);
-      this.icon(G, ic, x + bw / 2, H - navH + 42, 54, L, 'UI', 12);
-      this.text(G, label, x, H - navH + 68, bw, 22, '255;246;226', 'center', L, 'UI', 12, '60;36;20');
+      this.icon(G, ic, x + bw / 2, B - navH + 42, 54, L, 'UI', 12);
+      this.text(G, label, x, B - navH + 68, bw, 22, '255;246;226', 'center', L, 'UI', 12, '60;36;20');
       hud.tabs[id] = sel;
-      this.hit(hud.hits, x, H - navH - 4, bw, navH + 4, () => this.toggle(G, id), 'tab:' + id);
+      this.hit(hud.hits, x, B - navH - 4, bw, navH + 4, () => this.toggle(G, id), 'tab:' + id);
     });
     hud.badge = {};
-    hud.ordersBadge = this.panelBox(G, 'BtnRed', 12 + bw - 46, H - navH - 6, 38, 34, L, 13);
-    hud.ordersBadgeText = this.text(G, '0', 12 + bw - 46, H - navH - 4, 38, 22, '255;255;255', 'center', L, 'UI', 14);
+    hud.ordersBadge = this.panelBox(G, 'BtnRed', 12 + bw - 46, B - navH - 6, 38, 34, L, 13);
+    hud.ordersBadgeText = this.text(G, '0', 12 + bw - 46, B - navH - 4, 38, 22, '255;255;255', 'center', L, 'UI', 14);
   },
 
   updateHud(G) {
@@ -275,7 +291,7 @@ PS.UI = {
   frame(G, P, title, h) {
     const W = this.W(G);
     const H = this.H(G);
-    const bottom = H - 126;
+    const bottom = this.bottom(G) - 126;
     const top = Math.max(140, bottom - h);
     P.rect = { x: 8, y: top, w: W - 16, h: bottom - top };
     // Block taps on the panel background.
@@ -768,31 +784,39 @@ PS.UI = {
       onTap: () => PS.World.reopen(G, true) && this.close(G),
       onDisabled: () => this.toast(G, 'Not enough gems'),
     });
-    this.button(G, P, area.x, area.y + 362, area.w, 80, 'BtnPurple', 'Watch an ad to reopen (' + PS.Ads.left(G) + ' left today)', {
+    this.button(G, P, area.x, area.y + 362, area.w, 80, PS.Ads.available(G) ? 'BtnPurple' : 'BtnGray',
+      PS.Ads.label(G, 'Watch an ad to reopen'), {
       tag: 'reopenAd',
       icon: 'icon_ad',
       size: 24,
-      disabled: PS.Ads.left(G) <= 0,
+      disabled: !PS.Ads.available(G),
       onTap: () => PS.Ads.watch(G, 'Reopen the shop', () => {
         G.state.closed = false;
         G.state.satisfaction = 55;
+        G.spawnTimer = 2;
         G.saveNow();
-      }),
-      onDisabled: () => this.toast(G, 'No more ads today'),
+      }, 'reopen_shop'),
+      onDisabled: () => this.toast(G, PS.Ads.unavailableText(G)),
     });
   },
 
-  // ----- Rewarded ad placeholder (real ads come with the mobile app build).
+  // ----- Rewarded ad. While the ad adapter shows a real ad this panel only
+  // says so; in the GDevelop preview (no adapter) it is a labelled test ad.
   buildAd(G, P) {
-    const area = this.frame(G, P, 'Watch an ad', 700);
+    const area = this.frame(G, P, P.params.preview ? 'Test ad (preview)' : 'Rewarded ad', 600);
+    this.text(G, 'Reward: ' + P.params.reason, area.x, area.y + 10, area.w, 26, COLORS.ink, 'center', P.items, 'UI', 17);
+    if (!P.params.preview) {
+      this.text(G, 'Showing the ad...\nThe reward is given when the ad is finished.', area.x, area.y + 90, area.w, 26,
+        COLORS.muted, 'center', P.items, 'UI', 17);
+      return;
+    }
     const left = Math.max(0, (P.params.until - Date.now()) / 1000);
-    this.panelBox(G, 'PanelDark', area.x, area.y, area.w, 300, P.items, 16);
-    this.text(G, 'Advertisement', area.x, area.y + 40, area.w, 36, '255;255;255', 'center', P.items, 'UI', 17);
-    this.text(G, 'In the app version a short video ad plays here.\nThis web build shows a placeholder.', area.x + 20,
-      area.y + 110, area.w - 40, 24, '220;220;230', 'center', P.items, 'UI', 17);
+    this.panelBox(G, 'PanelDark', area.x, area.y + 60, area.w, 230, P.items, 16);
+    this.text(G, 'GDEVELOP PREVIEW TEST AD', area.x, area.y + 90, area.w, 32, '255;120;110', 'center', P.items, 'UI', 17);
+    this.text(G, 'Not a real ad. Exported builds use the ad adapter instead.', area.x + 20, area.y + 140, area.w - 40, 22,
+      '220;220;230', 'center', P.items, 'UI', 17);
     this.text(G, left > 0 ? Math.ceil(left) + '' : '', area.x, area.y + 200, area.w, 48, COLORS.gold, 'center', P.items, 'UI', 17);
-    this.text(G, 'Reward: ' + P.params.reason, area.x, area.y + 320, area.w, 26, COLORS.ink, 'center', P.items, 'UI', 17);
-    this.button(G, P, area.x + area.w / 2 - 170, area.y + 370, 340, 80, left > 0 ? 'BtnGray' : 'BtnGreen', 'Claim reward', {
+    this.button(G, P, area.x + area.w / 2 - 170, area.y + 320, 340, 80, left > 0 ? 'BtnGray' : 'BtnGreen', 'Claim reward', {
       tag: 'claimAd',
       icon: 'icon_check',
       size: 30,

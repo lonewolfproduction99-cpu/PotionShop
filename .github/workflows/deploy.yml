@@ -1,0 +1,53 @@
+# Deploy the Potion Shop PWA to Cloudflare Pages (HTTPS).
+#
+# The GDevelop HTML5 export is committed in docs/ (tools/export.sh). This
+# workflow re-applies the PWA layer with the PRODUCTION ad config (no simulated
+# ads) into dist/ and uploads it.
+#
+# One-time setup (see pwa/README.md):
+#   - Cloudflare: create a Pages project (Direct Upload) named potion-shop,
+#     or set the repository variable CLOUDFLARE_PROJECT to your project name.
+#   - GitHub repository secrets: CLOUDFLARE_API_TOKEN (Account > Cloudflare Pages > Edit)
+#     and CLOUDFLARE_ACCOUNT_ID.
+# Pushes to main deploy to production; other branches (run manually) get a preview URL.
+name: Deploy PWA to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'pwa/**', 'tools/pwa/**', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: cloudflare-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build the production PWA
+        run: python3 tools/pwa/apply_pwa.py docs dist --ads production
+
+      - name: Check the production build has no simulated ads
+        run: |
+          grep -q "mode: 'production'" dist/ads-config.js
+          ! grep -q "provider: 'simulated'" dist/ads-config.js
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PROJECT || 'potion-shop' }} --branch=${{ github.ref_name }}

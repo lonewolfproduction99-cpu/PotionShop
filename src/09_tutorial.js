@@ -268,7 +268,7 @@ PS.Tutorial = {
     if (s && s.world) target = PS.proj.toScreen(s.world[0], s.world[1], s.world[2]);
     else if (s && s.screen) target = s.screen;
     // The banner sits above the bottom bar, or at the top when it would cover the target.
-    const top = !!(target && target[1] > H - 330);
+    const top = !!(target && target[1] > UI.bottom(G) - 330);
     const key = s ? s.text + '|' + (s.next || '') + '|' + top : '';
     if (key !== T.last) {
       // Rebuild the banner when the message changes.
@@ -279,7 +279,7 @@ PS.Tutorial = {
       T.skip = null;
       T.next = null;
       if (!s) return;
-      const y = top ? 140 : H - 126 - 116;
+      const y = top ? 140 : UI.bottom(G) - 126 - 116;
       UI.panelBox(G, 'PanelDark', 14, y, W - 28, 108, T.items, 50);
       UI.icon(G, 'icon_book', 52, y + 54, 52, T.items, 'UI', 51);
       UI.text(G, s.text, 86, y + 10, W - 226, 21, '255;255;255', 'left', T.items, 'UI', 51);

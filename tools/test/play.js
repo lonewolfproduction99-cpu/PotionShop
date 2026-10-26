@@ -65,7 +65,7 @@ server.listen(0, async () => {
     cauldrons: G.cauldrons.filter((c) => c.unlocked).map((c) => ({ state: c.state, recipe: c.recipe && c.recipe.id, t: +c.t.toFixed(1) })),
     owner: { x: Math.round(G.owner.obj.getX()), y: Math.round(G.owner.obj.getY()), task: G.owner.task && G.owner.task.type, phase: G.owner.task && G.owner.task.phase, queue: G.owner.queue.map((t) => t.type), carrying: G.owner.carrying && G.owner.carrying.id },
     panel: G.ui.panel && G.ui.panel.name, queue: G.queue.map((c) => c.id) }; });
-  const ctxObj = { page, shot, sleep, tapGame, tapWorld, state, evalG, errors, outDir };
+  const ctxObj = { page, ctx, shot, sleep, tapGame, tapWorld, state, evalG, errors, outDir, buildDir };
   try {
     const mod = require(path.resolve(__dirname, 'scenarios', scenario + '.js'));
     await mod(ctxObj);

@@ -158,7 +158,7 @@ PS.Garden = class {
     UI.icon(this, 'icon_quality', W - 110, 42, 30, L, 'UI', 11);
     this.gemText = UI.text(this, '0', W - 90, 28, 70, 26, '60;110;160', 'left', L, 'UI', 11);
     const P = { items: L, hits: this.ui.hud.hits };
-    UI.button(this, P, W / 2 - 170, H - 120, 340, 92, 'BtnBlue', 'Back to the shop', {
+    UI.button(this, P, W / 2 - 170, UI.bottom(this) - 120, 340, 92, 'BtnBlue', 'Back to the shop', {
       tag: 'back',
       icon: 'icon_back',
       iconSize: 56,
@@ -385,14 +385,14 @@ PS.GardenUI = {
       onDisabled: () => UI.toast(G, 'Not enough gold'),
     });
     y += 96;
-    const ads = PS.Ads.left(G);
-    UI.button(G, P, area.x, y, area.w, 80, 'BtnPurple', 'Watch an ad: half the time (' + ads + ' left today)', {
+    UI.button(G, P, area.x, y, area.w, 80, PS.Ads.available(G) ? 'BtnPurple' : 'BtnGray',
+      PS.Ads.label(G, 'Watch an ad: half the time'), {
       tag: 'speedAd',
       icon: 'icon_ad',
       size: 24,
-      disabled: ads <= 0,
-      onTap: () => PS.Ads.watch(G, 'Grow ' + herb.name + ' twice as fast', () => G.halveTime(p)),
-      onDisabled: () => UI.toast(G, 'No more ads today'),
+      disabled: !PS.Ads.available(G),
+      onTap: () => PS.Ads.watch(G, 'Grow ' + herb.name + ' twice as fast', () => G.halveTime(p), 'garden_speedup'),
+      onDisabled: () => UI.toast(G, PS.Ads.unavailableText(G)),
     });
   },
 };

@@ -114,6 +114,15 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 - **Rewarded ads:** always optional, limited to 10 per day. This web build shows a 3-second placeholder; real ads, an ad-free option and coin packs need the mobile app build (a later milestone).
 - **Narrow phones:** on narrow screens the satisfaction meter moves to the second row of the top bar.
 
+## Installable web app (PWA) and rewarded ads
+
+The exported build in `docs/` is also a Progressive Web App:
+- install it with Add to Home Screen (iPhone Safari) or Install app (Android Chrome);
+- it plays offline after the first launch and updates cleanly when a new version is deployed;
+- it has a rewarded-ad adapter that only grants a reward when a real ad network confirms it.
+
+`docs/` uses clearly labelled **simulated test ads**. The production deploy to Cloudflare Pages (`.github/workflows/deploy.yml`) uses no ads until an ad network approves the game. Setup, provider research and the steps that need your accounts are in **[pwa/README.md](pwa/README.md)**.
+
 ## Project structure
 
 | Path | What it is |
@@ -125,7 +134,8 @@ The exported HTML5 build is in `docs/`. It is published with GitHub Pages from t
 | `src/*.js` | Game systems. Each file is one JavaScript event in the `Shop` scene's events sheet |
 | `src/garden/*.js` | The herb garden, the JavaScript event of the `Garden` scene |
 | `tools/` | Asset generators, project builder, export script and Playwright play-tests |
-| `docs/` | Exported HTML5 build (GitHub Pages) |
+| `docs/` | Exported HTML5 build with the PWA layer (test build, simulated ads) |
+| `pwa/` | PWA layer: service worker template, ad adapter, ad configs, icons (applied by `tools/pwa/apply_pwa.py`) |
 
 ### Editing in GDevelop
 
@@ -146,7 +156,7 @@ python3 tools/build_ui.py        # UI images   -> game/assets/ui
 python3 tools/build_sfx.py       # sounds and music -> game/assets/sfx
 python3 tools/build_project.py   # GDevelop project (embeds src/*.js as events)
 tools/export.sh <GDevelop portable app dir> docs   # HTML5 export with the official GDevelop CLI
-node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, m6, tutorial, bot, showcase)
+node tools/test/play.js docs out loop              # headless play-test (also: smoke, queue, saveload, m2, m3, m4, m5, m6, tutorial, pwa, prodads, bot, showcase)
 ```
 
 Note: `build_project.py` regenerates `game/PotionShop.json`. If you edit the project in GDevelop, keep working in GDevelop or port your changes back to the tools.

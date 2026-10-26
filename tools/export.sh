@@ -14,5 +14,9 @@ rm -rf "$ROOT/$OUT"
 mkdir -p "$ROOT/$OUT"
 cp -r "$WORK/build/." "$ROOT/$OUT/"
 touch "$ROOT/$OUT/.nojekyll"
+# PWA layer (manifest, service worker, icons, ad adapter). docs/ is the test
+# build: it uses the development ad config (clearly labelled simulated ads).
+# The production deploy re-applies it with --ads production.
+python3 "$ROOT/tools/pwa/apply_pwa.py" "$ROOT/$OUT" --ads "${ADS_MODE:-development}"
 rm -rf "$WORK"
 echo "Exported to $OUT ($(du -sh "$ROOT/$OUT" | cut -f1))"

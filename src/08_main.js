@@ -34,9 +34,11 @@ PS.Audio = {
   },
 };
 
-// Rewarded ads with a daily limit. This web build shows a short placeholder;
-// the mobile app build will plug the real ad provider in here (show the ad,
-// then call the reward on success).
+// Rewarded ads with a daily limit. The real ad work is done by the ad adapter
+// (window.PotionAds, pwa/ads.js, added to the HTML5 export by
+// tools/pwa/apply_pwa.py). The reward is only given when the adapter reports
+// that the ad provider confirmed it. Without the adapter (GDevelop preview) a
+// clearly labelled test panel is used instead.
 PS.Ads = {
   today() {
     return new Date().toISOString().slice(0, 10);
@@ -49,17 +51,80 @@ PS.Ads = {
   left(G) {
     return Math.max(0, PS.data.balance.adDailyLimit - this.state(G).count);
   },
-  watch(G, reason, onReward) {
-    if (this.left(G) <= 0) {
-      PS.UI.toast(G, 'No more ads today, come back tomorrow');
+  adapter() {
+    return typeof window !== 'undefined' ? window.PotionAds : null;
+  },
+  preview(G) {
+    return !this.adapter() && G.scene.getGame().isPreview();
+  },
+  // Can an ad be requested now? (Buttons are disabled otherwise.)
+  available(G) {
+    if (this.left(G) <= 0) return false;
+    const A = this.adapter();
+    return A ? A.isAvailable() : this.preview(G);
+  },
+  // Short reason shown when ads cannot be watched.
+  unavailableText(G) {
+    if (this.left(G) <= 0) return 'No more ads today, come back tomorrow';
+    const A = this.adapter();
+    const st = A ? A.status() : 'no-provider';
+    if (st === 'offline') return 'You are offline: ads need an internet connection';
+    if (st === 'no-provider') return 'Ads are not available in this version';
+    if (st === 'loading') return 'Ads are still loading, try again in a moment';
+    return 'No ad is available right now, try again later';
+  },
+  // Button label suffix: "(3 left today)" or why ads are unavailable.
+  label(G, text) {
+    if (this.available(G)) return text + ' (' + this.left(G) + ' left today)';
+    return text + ' (unavailable)';
+  },
+  watch(G, reason, onReward, placement) {
+    if (!this.available(G)) {
+      PS.UI.toast(G, this.unavailableText(G));
       return false;
     }
-    PS.UI.open(G, 'ad', { reason, onReward, until: Date.now() + 3000 }); // real seconds, like a video
+    const A = this.adapter();
+    if (!A) {
+      // GDevelop preview only: a labelled test panel, never shown in exported builds.
+      PS.UI.open(G, 'ad', { reason, onReward, preview: true, until: Date.now() + 3000 });
+      return true;
+    }
+    PS.UI.open(G, 'ad', { reason, waiting: true });
+    A.showRewardedAd(placement || 'reward').then((res) => {
+      if (G.ui.panel && G.ui.panel.name === 'ad') PS.UI.close(G);
+      if (res.rewarded) {
+        this.claim(G);
+        onReward();
+        PS.Audio.play(G.shop || G, 'coin');
+        PS.UI.toast(G, 'Reward earned!');
+      } else {
+        PS.UI.toast(G, res.reason === 'dismissed' || res.reason === 'closed-early' || res.reason === 'not-completed'
+          ? 'Ad closed early: no reward' : 'No ad could be shown, no reward this time');
+      }
+    });
     return true;
   },
   claim(G) {
     this.state(G).count += 1;
     (G.shop || G).requestSave();
+  },
+  // While an ad is on screen the shop pauses and the sound is muted.
+  hookPause(G) {
+    const A = this.adapter();
+    if (!A || A._potionHooked) return;
+    A._potionHooked = true;
+    let volume = 100;
+    A._pauseGame = (on) => {
+      if (!!PS.adPlaying === !!on) return;
+      PS.adPlaying = !!on;
+      const sm = PS.game.scene.getGame().getSoundManager();
+      if (on) {
+        volume = sm.getGlobalVolume();
+        sm.setGlobalVolume(0);
+      } else {
+        sm.setGlobalVolume(volume);
+      }
+    };
   },
 };
 
@@ -87,6 +152,7 @@ PS.Game = class {
     this.setShadows(this.settings.shadows);
     PS.Tutorial.init(this);
     PS.Audio.music(this);
+    PS.Ads.hookPause(this);
     this.checkOffline();
     this.incomeTimer = 0;
     this.earnedMark = this.state.earned;
@@ -340,7 +406,8 @@ PS.Game = class {
     PS.proj.scene = this.scene; // the garden scene may have changed it
     const dt = Math.min(0.1, this.scene.getElapsedTime() / 1000);
     // PS.simSteps > 1 runs the simulation several times per frame (automated tests only).
-    const steps = PS.simSteps || 1;
+    // Paused while a rewarded ad is on screen.
+    const steps = PS.adPlaying ? 0 : PS.simSteps || 1;
     for (let i = 0; i < steps; i++) {
       this.time += dt;
       PS.World.updateCustomers(this, dt);
