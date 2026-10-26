@@ -73,7 +73,7 @@ gdjs.GardenCode.GDUiTextObjects1= [];
 gdjs.GardenCode.GDUiTextObjects2= [];
 
 
-gdjs.GardenCode.userFunc0x9ef3b0 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0x9c4ce8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 if (gdjs.PotionShop && gdjs.PotionShop.util) {
 // ===== Potion Shop: herb garden =====
@@ -476,7 +476,7 @@ PS.GardenUI = {
 }
 
 };
-gdjs.GardenCode.userFunc0x9f9518 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0x988110 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // The garden needs the shop systems: start from the shop if they are missing.
 const PS = gdjs.PotionShop;
@@ -492,7 +492,7 @@ gdjs.GardenCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.GardenCode.userFunc0x9ef3b0(runtimeScene);
+gdjs.GardenCode.userFunc0x9c4ce8(runtimeScene);
 
 }
 
@@ -500,12 +500,12 @@ gdjs.GardenCode.userFunc0x9ef3b0(runtimeScene);
 {
 
 
-gdjs.GardenCode.userFunc0x9f9518(runtimeScene);
+gdjs.GardenCode.userFunc0x988110(runtimeScene);
 
 }
 
 
-};gdjs.GardenCode.userFunc0x9f3ce0 = function GDJSInlineCode(runtimeScene) {
+};gdjs.GardenCode.userFunc0x988230 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const garden = runtimeScene.__garden;
 if (garden) garden.update();
@@ -531,7 +531,7 @@ gdjs.GardenCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.GardenCode.userFunc0x9f3ce0(runtimeScene);
+gdjs.GardenCode.userFunc0x988230(runtimeScene);
 
 }
 

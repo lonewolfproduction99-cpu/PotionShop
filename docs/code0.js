@@ -105,7 +105,7 @@ gdjs.ShopCode.GDUiTextObjects1= [];
 gdjs.ShopCode.GDUiTextObjects2= [];
 
 
-gdjs.ShopCode.userFunc0x9f7c48 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x9788a8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game data =====
 // Recipes, ingredients, customer types and upgrades are stored in the
@@ -254,7 +254,7 @@ PS.xpForLevel = function (level) {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f7d38 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978998 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: utilities =====
 // Math helpers, object helpers and the 3D -> screen projection used to place
@@ -393,7 +393,7 @@ PS.setupCamera = function (runtimeScene) {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f7e00 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978a60 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: navigation =====
 // Characters walk on a grid built once at scene start. Blocked cells come from
@@ -610,7 +610,7 @@ PS.goTo = function (ch, x, y) {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f7ec8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978b28 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: save system =====
 // Progress is stored with GDevelop's storage (localStorage on the web, also
@@ -787,7 +787,7 @@ PS.Save = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f7fd0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978c30 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: shop world =====
 // Builds the shop from the scene instances (tables, cauldrons, waypoints),
@@ -1073,13 +1073,13 @@ PS.World = {
     this.fillSeatsFromQueue(G);
   },
 
-  // One potion of an order handed over; the customer pays when all arrived.
+  // One potion of an order handed over: the customer pays for it right away
+  // (tip from their patience at that moment) and leaves once all arrived.
   deliverItem(G, c, recipe, quality) {
     const item = PS.Order.deliver(c, recipe.id, quality);
     if (!item) return false;
+    this.payItem(G, c, item);
     if (PS.Order.remaining(c) > 0) {
-      PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, PS.Order.remaining(c) + ' more to go', recipe.icon);
-      PS.Audio.play(G, 'pop');
       PS.UI.markDirty(G);
       return true;
     }
@@ -1087,35 +1087,37 @@ PS.World = {
     return true;
   },
 
-  // Every potion delivered: pay for all of them and leave happy.
-  serve(G, c) {
+  payItem(G, c, item) {
     const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
     const tip = 1 + PS.data.balance.tipMax * ratio;
-    let price = 0;
-    let mood = 0;
-    let best = 1;
-    for (const it of c.items) {
-      const q = PS.QUALITY[it.quality];
-      price += G.potionPrice(it.recipe) * q.price;
-      mood += q.mood;
-      best = Math.max(best, it.quality);
-    }
-    price = Math.round(price * tip * c.type.tip);
-    mood /= c.items.length;
+    const q = PS.QUALITY[item.quality];
+    const price = Math.round(G.potionPrice(item.recipe) * q.price * tip * c.type.tip);
+    item.paid = price;
     G.addGold(price);
-    G.state.served += 1;
     G.state.earned += price;
-    G.addXp((PS.data.balance.xpPerServe + Math.round(5 * ratio)) * c.items.length);
+    G.addXp(PS.data.balance.xpPerServe + Math.round(5 * ratio));
+    const left = PS.Order.remaining(c);
+    const label = '+' + U.formatGold(price) + (item.quality >= 2 ? '  ' + q.name + '!' : '') +
+      (left > 0 ? '  (' + left + ' more)' : '');
+    // Stack the floating texts of quick deliveries a little.
+    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95 + (c.items.length - 1 - left) * 4, label, 'icon_coin');
+    PS.Audio.play(G, 'coin');
+  },
+
+  // Every potion delivered (and paid): leave happy.
+  serve(G, c) {
+    const ratio = U.clamp(c.patience / c.maxPatience, 0, 1);
+    let mood = 0;
+    for (const it of c.items) mood += PS.QUALITY[it.quality].mood;
+    mood /= c.items.length;
+    G.state.served += 1;
     G.recordSatisfaction(U.clamp(50 + 50 * ratio + mood, 0, 100));
-    const label = '+' + U.formatGold(price) + (best >= 2 ? '  ' + PS.QUALITY[best].name + '!' : '');
-    PS.UI.floatText(G, c.obj.getX(), c.obj.getY(), 95, label, 'icon_coin');
     // Delighted customers (served before patience dropped below 90%) may leave a special herb.
     if (ratio >= 0.9 && Math.random() < PS.data.balance.giftChance) this.gift(G, c);
     c.state = 'served';
     c.timer = 1.3;
     c.obj.setZ(0);
     PS.setAnim(c, 'Cheer');
-    PS.Audio.play(G, 'coin');
     if (c.seat) {
       c.seat.occupant = null;
       c.seat = null;
@@ -1365,7 +1367,7 @@ PS.FX = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f80a8 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978d08 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: workers and task queue =====
 // Every worker performs one physical task at a time.
@@ -1840,7 +1842,7 @@ PS.Workers = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f8180 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978de0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: brewing =====
 // Cauldron states: idle -> reserved (ingredients paid, worker on the way)
@@ -2121,7 +2123,7 @@ PS.Stock = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f8258 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978eb8 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: interface =====
 // HUD (top), navigation (bottom), panels (brew, orders, ingredients,
@@ -3670,7 +3672,7 @@ PS.Input = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f8330 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x978f90 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: game state, progression and main loop =====
 const PS = gdjs.PotionShop;
@@ -4038,7 +4040,7 @@ PS.Game = class {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f8408 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x979068 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // ===== Potion Shop: first-time tutorial =====
 // Guides a new player through the first order: a bouncing hand points at
@@ -4145,7 +4147,7 @@ PS.Tutorial = {
 };
 
 };
-gdjs.ShopCode.userFunc0x9f84e0 = function GDJSInlineCode(runtimeScene) {
+gdjs.ShopCode.userFunc0x979140 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // Create the game once the systems above are defined.
 const PS = gdjs.PotionShop;
@@ -4164,7 +4166,7 @@ gdjs.ShopCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.ShopCode.userFunc0x9f7c48(runtimeScene);
+gdjs.ShopCode.userFunc0x9788a8(runtimeScene);
 
 }
 
@@ -4172,7 +4174,7 @@ gdjs.ShopCode.userFunc0x9f7c48(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f7d38(runtimeScene);
+gdjs.ShopCode.userFunc0x978998(runtimeScene);
 
 }
 
@@ -4180,7 +4182,7 @@ gdjs.ShopCode.userFunc0x9f7d38(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f7e00(runtimeScene);
+gdjs.ShopCode.userFunc0x978a60(runtimeScene);
 
 }
 
@@ -4188,7 +4190,7 @@ gdjs.ShopCode.userFunc0x9f7e00(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f7ec8(runtimeScene);
+gdjs.ShopCode.userFunc0x978b28(runtimeScene);
 
 }
 
@@ -4196,7 +4198,7 @@ gdjs.ShopCode.userFunc0x9f7ec8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f7fd0(runtimeScene);
+gdjs.ShopCode.userFunc0x978c30(runtimeScene);
 
 }
 
@@ -4204,7 +4206,7 @@ gdjs.ShopCode.userFunc0x9f7fd0(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f80a8(runtimeScene);
+gdjs.ShopCode.userFunc0x978d08(runtimeScene);
 
 }
 
@@ -4212,7 +4214,7 @@ gdjs.ShopCode.userFunc0x9f80a8(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f8180(runtimeScene);
+gdjs.ShopCode.userFunc0x978de0(runtimeScene);
 
 }
 
@@ -4220,7 +4222,7 @@ gdjs.ShopCode.userFunc0x9f8180(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f8258(runtimeScene);
+gdjs.ShopCode.userFunc0x978eb8(runtimeScene);
 
 }
 
@@ -4228,7 +4230,7 @@ gdjs.ShopCode.userFunc0x9f8258(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f8330(runtimeScene);
+gdjs.ShopCode.userFunc0x978f90(runtimeScene);
 
 }
 
@@ -4236,7 +4238,7 @@ gdjs.ShopCode.userFunc0x9f8330(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f8408(runtimeScene);
+gdjs.ShopCode.userFunc0x979068(runtimeScene);
 
 }
 
@@ -4244,12 +4246,12 @@ gdjs.ShopCode.userFunc0x9f8408(runtimeScene);
 {
 
 
-gdjs.ShopCode.userFunc0x9f84e0(runtimeScene);
+gdjs.ShopCode.userFunc0x979140(runtimeScene);
 
 }
 
 
-};gdjs.ShopCode.userFunc0x9f86c0 = function GDJSInlineCode(runtimeScene) {
+};gdjs.ShopCode.userFunc0x979378 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const game = runtimeScene.__potionShop;
 if (game) game.update();
@@ -4275,7 +4277,7 @@ gdjs.ShopCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.ShopCode.userFunc0x9f86c0(runtimeScene);
+gdjs.ShopCode.userFunc0x979378(runtimeScene);
 
 }
 
