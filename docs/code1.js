@@ -73,7 +73,7 @@ gdjs.GardenCode.GDUiTextObjects1= [];
 gdjs.GardenCode.GDUiTextObjects2= [];
 
 
-gdjs.GardenCode.userFunc0x9c4ce8 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0x9f6ac0 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 if (gdjs.PotionShop && gdjs.PotionShop.util) {
 // ===== Potion Shop: herb garden =====
@@ -135,6 +135,7 @@ PS.Garden = class {
       this.makePlant(p);
     });
     this.buildHud();
+    PS.Tutorial.init(this); // the garden part of the tutorial
   }
 
   // The shop's state and settings (so shared interface code works here too).
@@ -386,6 +387,7 @@ PS.Garden = class {
     this.gemText.setText(U.formatGold(this.state.gems));
     PS.FX.update(this, dt);
     PS.UI.updateTransient(this, dt);
+    PS.Tutorial.update(this, dt);
     // Panels with timers refresh twice per second.
     this.ui.refreshTimer -= dt;
     if (this.ui.panel && this.ui.refreshTimer <= 0) {
@@ -476,7 +478,7 @@ PS.GardenUI = {
 }
 
 };
-gdjs.GardenCode.userFunc0x988110 = function GDJSInlineCode(runtimeScene) {
+gdjs.GardenCode.userFunc0x988050 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 // The garden needs the shop systems: start from the shop if they are missing.
 const PS = gdjs.PotionShop;
@@ -492,7 +494,7 @@ gdjs.GardenCode.eventsList0 = function(runtimeScene) {
 {
 
 
-gdjs.GardenCode.userFunc0x9c4ce8(runtimeScene);
+gdjs.GardenCode.userFunc0x9f6ac0(runtimeScene);
 
 }
 
@@ -500,12 +502,12 @@ gdjs.GardenCode.userFunc0x9c4ce8(runtimeScene);
 {
 
 
-gdjs.GardenCode.userFunc0x988110(runtimeScene);
+gdjs.GardenCode.userFunc0x988050(runtimeScene);
 
 }
 
 
-};gdjs.GardenCode.userFunc0x988230 = function GDJSInlineCode(runtimeScene) {
+};gdjs.GardenCode.userFunc0x988170 = function GDJSInlineCode(runtimeScene) {
 "use strict";
 const garden = runtimeScene.__garden;
 if (garden) garden.update();
@@ -531,7 +533,7 @@ gdjs.GardenCode.eventsList0(runtimeScene);} //End of subevents
 {
 
 
-gdjs.GardenCode.userFunc0x988230(runtimeScene);
+gdjs.GardenCode.userFunc0x988170(runtimeScene);
 
 }
 
