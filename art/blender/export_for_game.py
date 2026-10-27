@@ -20,8 +20,18 @@ import os
 
 import bpy
 
-txt = bpy.context.space_data.text if bpy.context.space_data and hasattr(bpy.context.space_data, "text") else None
-HERE = os.path.dirname(bpy.path.abspath(txt.filepath)) if txt and txt.filepath else os.path.dirname(bpy.data.filepath)
+txt = None
+try:
+    space = bpy.context.space_data
+    txt = space.text if space is not None and hasattr(space, "text") else None
+except AttributeError:
+    pass
+if "__file__" in globals() and os.path.isfile(__file__):
+    HERE = os.path.dirname(os.path.abspath(__file__))
+elif txt and txt.filepath:
+    HERE = os.path.dirname(bpy.path.abspath(txt.filepath))
+else:
+    HERE = os.path.dirname(bpy.data.filepath)
 OUT = os.path.join(HERE, "exported")
 
 
@@ -66,7 +76,8 @@ def main():
             o.location.x += offsets[o.name]
     print("Exported", path)
     self_report = "Exported %s" % path
-    bpy.context.window_manager.popup_menu(lambda m, c: m.layout.label(text=self_report), title="Potion Shop")
+    if not bpy.app.background:  # a message box needs Blender's window
+        bpy.context.window_manager.popup_menu(lambda m, c: m.layout.label(text=self_report), title="Potion Shop")
 
 
 main()

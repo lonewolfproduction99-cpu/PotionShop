@@ -17,8 +17,18 @@ import os
 
 import bpy
 
-txt = bpy.context.space_data.text if bpy.context.space_data and hasattr(bpy.context.space_data, "text") else None
-HERE = os.path.dirname(bpy.path.abspath(txt.filepath)) if txt and txt.filepath else os.path.dirname(bpy.data.filepath)
+txt = None
+try:
+    space = bpy.context.space_data
+    txt = space.text if space is not None and hasattr(space, "text") else None
+except AttributeError:
+    pass
+if "__file__" in globals() and os.path.isfile(__file__):
+    HERE = os.path.dirname(os.path.abspath(__file__))
+elif txt and txt.filepath:
+    HERE = os.path.dirname(bpy.path.abspath(txt.filepath))
+else:
+    HERE = os.path.dirname(bpy.data.filepath)
 MODELS = os.path.join(HERE, "models")
 
 # The editable models, in the order they are laid out.
