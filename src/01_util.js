@@ -51,7 +51,7 @@ PS.tint = function (obj, rgb) {
     if (!node.isMesh) return;
     const mats = Array.isArray(node.material) ? node.material : [node.material];
     mats.forEach((m, i) => {
-      if (m.name !== 'unlit') return;
+      if (!/^unlit(\.\d+)?$/.test(m.name)) return; // Blender may rename it unlit.001
       if (!m.userData.psOwn) {
         m = m.clone();
         m.userData.psOwn = true;

@@ -25,8 +25,14 @@ def main(only=None):
         builders.update(props.BUILDERS)
     except ImportError:
         pass
+    # Models edited by hand in Blender (tools/blender/update_models.py) are kept.
+    edited_path = os.path.join(os.path.dirname(__file__), "..", "art", "blender", "edited.json")
+    edited = set(json.load(open(edited_path))) if os.path.exists(edited_path) else set()
     for name, fn in builders.items():
         if only and name not in only:
+            continue
+        if name in edited:
+            print(name, "kept (edited in Blender)")
             continue
         model = fn()
         # Furniture and characters are authored small and scaled up together;
